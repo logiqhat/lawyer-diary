@@ -1,0 +1,55 @@
+{
+  "project_info": {
+    "project_number": "702028179672",
+    "project_id": "lawyer-diary-f6546",
+    "storage_bucket": "lawyer-diary-f6546.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:702028179672:android:143f9d47cf8c023bf1cfad",
+        "android_client_info": {
+          "package_name": "com.saurabhchatterjee17.LawyerDiary"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "702028179672-602km73nigpulh122lhra6gtr4j3eeo0.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.saurabhchatterjee17.LawyerDiary",
+            "certificate_hash": "5e8f16062ea3cd2c4a0d547876baa6f38cabf625"
+          }
+        },
+        {
+          "client_id": "702028179672-lpjf4on9766f6gs4r9kio94kfmjnpb0u.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.saurabhchatterjee17.LawyerDiary",
+            "certificate_hash": "a30fbf0c9a2bd1eb4604ce744c326c1eeaeeec6b"
+          }
+        },
+        {
+          "client_id": "702028179672-hpqor5ll2d53n7nffpma7dj44s2itdqn.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAzG3Lt67vbgoDHLT1RbgtthVgrTIkhLGE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "702028179672-hpqor5ll2d53n7nffpma7dj44s2itdqn.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

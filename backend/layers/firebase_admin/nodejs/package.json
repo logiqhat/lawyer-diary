@@ -1,0 +1,11 @@
+{
+  "name": "firebase-admin-layer",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Lambda layer packaging firebase-admin for admin_notify function",
+  "license": "UNLICENSED",
+  "dependencies": {
+    "firebase-admin": "^12.6.0"
+  }
+}
+
