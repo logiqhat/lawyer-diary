@@ -47,3 +47,9 @@ variable "admin_shared_secret" {
 }
 
 // The SSM parameter name for the Firebase service account JSON is derived in main.tf locals.
+
+variable "aws_profile" {
+  description = "AWS CLI profile name to use for provider authentication (optional; if null, uses default resolution)"
+  type        = string
+  default     = null
+}

@@ -4,13 +4,13 @@ import { initializeAuth, getReactNativePersistence } from 'firebase/auth';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const firebaseConfig = {
-  apiKey: "AIzaSyA-5ZWhSy5bUtLLSI_OdgJGXa7kVIt2Jks",
-  authDomain: "lawyer-diary-f6546.firebaseapp.com",
-  projectId: "lawyer-diary-f6546",
-  storageBucket: "lawyer-diary-f6546.firebasestorage.app",
-  messagingSenderId: "702028179672",
-  appId: "1:702028179672:web:3c95300c3bcaf513f1cfad",
-  measurementId: "G-WEFB83Q7SN"
+  apiKey: "AIzaSyCWcGB-YRbbTwDTLnZucd2EvWZbRxgdSc4",
+  authDomain: "lawyer-diary-d5ca7.firebaseapp.com",
+  projectId: "lawyer-diary-d5ca7",
+  storageBucket: "lawyer-diary-d5ca7.firebasestorage.app",
+  messagingSenderId: "306995543731",
+  appId: "1:306995543731:web:496800719e45c87e98bac6",
+  measurementId: "G-NXKQR42YC2"
 };
 
 function validateFirebaseConfig(config) {

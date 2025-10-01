@@ -8,18 +8,17 @@ const UPCOMING_TABLE = process.env.UPCOMING_NOTIF_TABLE
 const USERS_TABLE = process.env.USERS_TABLE
 const SSM_PARAM = process.env.FIREBASE_SERVICE_ACCOUNT_PARAM
 
-let admin = null
-async function ensureFirebaseAdmin(ssm) {
-  if (admin) return admin
+// Top-level initialization so it runs once per container (cold start)
+const ssm = new AWS.SSM()
+const adminInit = (async () => {
   if (!SSM_PARAM) throw new Error('FIREBASE_SERVICE_ACCOUNT_PARAM not set')
   const res = await ssm.getParameter({ Name: SSM_PARAM, WithDecryption: true }).promise()
   const sa = JSON.parse(res.Parameter?.Value || '{}')
   // eslint-disable-next-line global-require
   const firebase = require('firebase-admin')
   if (!firebase.apps.length) firebase.initializeApp({ credential: firebase.credential.cert(sa) })
-  admin = firebase
-  return admin
-}
+  return firebase
+})()
 
 function nowMinute() {
   return Math.floor(Date.now() / 60000) * 60000
@@ -33,8 +32,7 @@ function getSetValues(val) {
 }
 
 exports.handler = async () => {
-  const ssm = new AWS.SSM()
-  const fb = await ensureFirebaseAdmin(ssm)
+  const fb = await adminInit
   const t = nowMinute()
 
   // Query all users for this minute
@@ -116,4 +114,3 @@ exports.handler = async () => {
 
   return { statusCode: 200, body: JSON.stringify({ minute: t, users: totalUsers, sent: totalSent }) }
 }
-

@@ -3,9 +3,10 @@
 aws_region          = "us-east-1"
 project             = "lawyerdiary"
 stage               = "dev"
+aws_profile         = "logiqhat"
 
 # Firebase project used by API Gateway JWT authorizer
-firebase_project_id = "lawyer-diary-f6546"
+firebase_project_id = "lawyer-diary-d5ca7"
 
 # CORS (use concrete origins in prod)
 allowed_origins     = ["*"]
@@ -18,4 +19,3 @@ default_test_user_id = "test-user-123"
 
 # Admin notify shared secret is stored in SSM, not here. Leave empty or set via TF var securely.
 admin_shared_secret = ""
-

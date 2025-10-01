@@ -13,19 +13,20 @@ terraform {
 
 provider "aws" {
   region = var.aws_region
+  profile = var.aws_profile
 }
 
 # ---------------- Locals ----------------
 locals {
   # SSM parameter name for the Firebase service account JSON
-  firebase_service_account_param_name = "/${var.project}/${var.stage}/firebase-service-account"
+  firebase_service_account_param_name = "/${var.project}/firebase-service-account"
   # SSM parameter name for the admin shared secret used by /admin/notify
-  admin_shared_secret_param_name      = "/${var.project}/${var.stage}/admin-shared-secret"
+  admin_shared_secret_param_name      = "/${var.project}/admin-shared-secret"
 }
 
 # ---------------- DynamoDB Tables ----------------
 resource "aws_dynamodb_table" "cases" {
-  name         = "${var.project}-cases-${var.stage}"
+  name         = "${var.project}-cases"
   billing_mode = "PAY_PER_REQUEST"
 
   hash_key  = "userId"
@@ -43,7 +44,7 @@ resource "aws_dynamodb_table" "cases" {
 
 # ---------------- Users table (profile/metadata per user) ----------------
 resource "aws_dynamodb_table" "users" {
-  name         = "${var.project}-users-${var.stage}"
+  name         = "${var.project}-users"
   billing_mode = "PAY_PER_REQUEST"
 
   hash_key = "userId"
@@ -55,7 +56,7 @@ resource "aws_dynamodb_table" "users" {
 }
 
 resource "aws_dynamodb_table" "case_dates" {
-  name         = "${var.project}-case-dates-${var.stage}"
+  name         = "${var.project}-case-dates"
   billing_mode = "PAY_PER_REQUEST"
 
   hash_key  = "userId"
@@ -82,7 +83,7 @@ resource "aws_dynamodb_table" "case_dates" {
 # Stores per-minute notification buckets per user
 # PK (notifyTimeMs: N), SK (userId: S)
 resource "aws_dynamodb_table" "upcoming_notifications" {
-  name         = "${var.project}-upcoming-notifications-${var.stage}"
+  name         = "${var.project}-upcoming-notifications"
   billing_mode = "PAY_PER_REQUEST"
 
   hash_key  = "notifyTimeMs"
@@ -118,12 +119,12 @@ data "aws_iam_policy_document" "lambda_assume" {
 }
 
 resource "aws_iam_role" "lambda_role" {
-  name               = "${var.project}-lambda-role-${var.stage}"
+  name               = "${var.project}-lambda-role"
   assume_role_policy = data.aws_iam_policy_document.lambda_assume.json
 }
 
 resource "aws_iam_role_policy" "lambda_dynamo" {
-  name = "${var.project}-lambda-dynamo-${var.stage}"
+  name = "${var.project}-lambda-dynamo"
   role = aws_iam_role.lambda_role.id
 
   policy = jsonencode({
@@ -168,7 +169,7 @@ resource "aws_iam_role_policy" "lambda_dynamo" {
 
 # Allow Lambda to read the SecureString parameter
 resource "aws_iam_role_policy" "lambda_ssm_read" {
-  name = "${var.project}-lambda-ssm-read-${var.stage}"
+  name = "${var.project}-lambda-ssm-read"
   role = aws_iam_role.lambda_role.id
 
   policy = jsonencode({
@@ -232,14 +233,14 @@ data "archive_file" "sync_zip" {
 
 resource "aws_lambda_layer_version" "shared" {
   filename            = data.archive_file.layer_zip.output_path
-  layer_name          = "${var.project}-shared-${var.stage}"
+  layer_name          = "${var.project}-shared"
   compatible_runtimes = ["nodejs16.x"]
   source_code_hash    = filebase64sha256(data.archive_file.layer_zip.output_path)
 }
 
 resource "aws_lambda_layer_version" "firebase_admin" {
   filename            = data.archive_file.firebase_admin_layer_zip.output_path
-  layer_name          = "${var.project}-firebase-admin-${var.stage}"
+  layer_name          = "${var.project}-firebase-admin"
   compatible_runtimes = ["nodejs16.x"]
   source_code_hash    = filebase64sha256(data.archive_file.firebase_admin_layer_zip.output_path)
 }
@@ -288,7 +289,7 @@ data "archive_file" "notifier_zip" {
 }
 
 resource "aws_lambda_function" "users" {
-  function_name = "${var.project}-users-${var.stage}"
+  function_name = "${var.project}-users"
   role          = aws_iam_role.lambda_role.arn
   handler       = "index.handler"
   runtime       = "nodejs16.x"
@@ -301,7 +302,7 @@ resource "aws_lambda_function" "users" {
 }
 
 resource "aws_lambda_function" "cases" {
-  function_name = "${var.project}-cases-${var.stage}"
+  function_name = "${var.project}-cases"
   role          = aws_iam_role.lambda_role.arn
   handler       = "index.handler"
   runtime       = "nodejs16.x"
@@ -322,7 +323,7 @@ resource "aws_lambda_function" "cases" {
 }
 
 resource "aws_lambda_function" "dates" {
-  function_name = "${var.project}-dates-${var.stage}"
+  function_name = "${var.project}-dates"
   role          = aws_iam_role.lambda_role.arn
   handler       = "index.handler"
   runtime       = "nodejs16.x"
@@ -343,7 +344,7 @@ resource "aws_lambda_function" "dates" {
 }
 
 resource "aws_lambda_function" "admin_notify" {
-  function_name = "${var.project}-admin-notify-${var.stage}"
+  function_name = "${var.project}-admin-notify"
   role          = aws_iam_role.lambda_role.arn
   handler       = "index.handler"
   runtime       = "nodejs16.x"
@@ -364,7 +365,7 @@ resource "aws_lambda_function" "admin_notify" {
 
 # Sync lambda
 resource "aws_lambda_function" "sync" {
-  function_name = "${var.project}-sync-${var.stage}"
+  function_name = "${var.project}-sync"
   role          = aws_iam_role.lambda_role.arn
   handler       = "index.handler"
   runtime       = "nodejs16.x"
@@ -388,7 +389,7 @@ resource "aws_lambda_function" "sync" {
 
 # Notify indexer lambda (streams)
 resource "aws_lambda_function" "notify_indexer" {
-  function_name = "${var.project}-notify-indexer-${var.stage}"
+  function_name = "${var.project}-notify-indexer"
   role          = aws_iam_role.lambda_role.arn
   handler       = "index.handler"
   runtime       = "nodejs16.x"
@@ -409,7 +410,7 @@ resource "aws_lambda_function" "notify_indexer" {
 
 # Notifier lambda (scheduled via EventBridge every minute)
 resource "aws_lambda_function" "notifier" {
-  function_name = "${var.project}-notifier-${var.stage}"
+  function_name = "${var.project}-notifier"
   role          = aws_iam_role.lambda_role.arn
   handler       = "index.handler"
   runtime       = "nodejs16.x"
@@ -435,7 +436,7 @@ resource "aws_cloudwatch_log_group" "lambda_notifier" {
 
 # EventBridge rule to trigger every minute
 resource "aws_cloudwatch_event_rule" "notifier_minutely" {
-  name                = "${var.project}-notifier-minutely-${var.stage}"
+  name                = "${var.project}-notifier-minutely"
   schedule_expression = "cron(* * * * ? *)"
 }
 
@@ -472,7 +473,7 @@ resource "aws_lambda_event_source_mapping" "case_dates_stream_to_notify_indexer"
 
 # CloudWatch access logs for API Gateway HTTP API
 resource "aws_cloudwatch_log_group" "api_access" {
-  name              = "/aws/apigateway/${var.project}-${var.stage}-access"
+  name              = "/aws/apigateway/${var.project}-access"
   retention_in_days = 14
 }
 
@@ -495,7 +496,7 @@ resource "aws_cloudwatch_log_group" "lambda_notify_indexer" {
 
 # ---------------- HTTP API (API Gateway v2) ----------------
 resource "aws_apigatewayv2_api" "http_api" {
-  name          = "${var.project}-http-${var.stage}"
+  name          = "${var.project}-http"
   protocol_type = "HTTP"
 
   cors_configuration {

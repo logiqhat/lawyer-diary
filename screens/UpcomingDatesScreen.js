@@ -15,7 +15,7 @@ function EmptyStateCard({ type, onPrimaryPress }) {
   const emoji = isCases ? '📁' : '📅';
   const title = isCases ? 'Add your first case.' : 'No upcoming dates.';
   const subtitle = isCases
-    ? 'This docket is cleaner than a lawyer’s conscience.'
+    ? 'This diary has a clean record 😉'
     : 'No upcoming hearings. Add a hearing, deadline, or meeting to get started.';
   const cta = isCases ? 'Add Case' : 'Add Date';
 
