@@ -5,7 +5,7 @@ import { addDate, updateDate } from '../store/caseDatesSlice';
 import { selectDateById } from '../store/selectors';
 import { toLocalYMD, parseYMDLocal } from '../utils/dateFmt';
 
-export function useAddOrEditDate({ dateId }) {
+export function useAddOrEditDate({ dateId } = {}) {
   const dispatch = useDispatch();
   const existingDate = useSelector(selectDateById(dateId));
 

@@ -1,5 +1,5 @@
 // src/screens/CreateCaseScreen.js
-import React, { useState, useLayoutEffect, useCallback } from 'react';
+import React, { useState, useLayoutEffect, useCallback, useEffect, useMemo } from 'react';
 import {
   SafeAreaView,
   KeyboardAvoidingView,
@@ -10,6 +10,7 @@ import {
   TextInput,
   TouchableOpacity,
   StyleSheet,
+  Keyboard,
 } from 'react-native';
 import { useDispatch } from 'react-redux';
 import { useNavigation, useRoute } from '@react-navigation/native';
@@ -18,6 +19,11 @@ import uuid from 'react-native-uuid';
 import { addCase, updateCase } from '../store/casesSlice';
 import colors from '../theme/colors';
 import { impactLight, successNotify } from '../utils/haptics';
+import { logGenericEvent } from '../services/analytics';
+import { syncIfWatermelon } from '../services/syncService';
+import SavingSyncOverlay from '../components/SavingSyncOverlay';
+import NativeAdCard from '../components/NativeAdCard';
+import { AD_REPO_ID, registerAdRepository } from '../services/admobNative';
 
 export default function CreateCaseScreen() {
   const dispatch   = useDispatch();
@@ -30,6 +36,7 @@ export default function CreateCaseScreen() {
     clientName: routeClient = '',
     oppositePartyName: routeOpp = '',
     details: routeDetails = '',
+    source: routeSource,
   } = route.params || {};
 
   // Form state, initialized from route (empty for create)
@@ -56,10 +63,13 @@ export default function CreateCaseScreen() {
     (caseDetails.trim() || '') !== (initialDetails || '');
 
   const canSubmit = requiredOk && withinLimits && (!isEditing || isDirty);
+  const [progressVisible, setProgressVisible] = useState(false);
+  const [progressStage, setProgressStage] = useState(0); // 0 saving, 1 syncing, 2 done
 
   const onSubmit = useCallback(async () => {
     if (!canSubmit) return;
     try { impactLight(); } catch {}
+    try { Keyboard.dismiss(); } catch {}
 
     const now = Date.now();
     const payload = {
@@ -73,15 +83,29 @@ export default function CreateCaseScreen() {
       updatedAt: now,
     };
 
+    const created = !caseId;
     if (caseId) {
       await dispatch(updateCase(payload)).unwrap();
-      try { successNotify(); } catch {}
-      navigation.goBack(); // back to detail
     } else {
       await dispatch(addCase(payload)).unwrap();
-      try { successNotify(); } catch {}
-      // Go straight to the new case details and replace the Create screen
+      try {
+        logGenericEvent('case_created', { source: routeSource || 'unknown' });
+      } catch {}
+    }
+    try { successNotify(); } catch {}
+
+    // Show progress overlay: mark saving done, then sync, then navigate
+    setProgressStage(1);
+    setProgressVisible(true);
+    try { syncIfWatermelon(); } catch {}
+    // Ensure the overlay shows for at least 1200ms regardless of sync duration
+    await new Promise((res) => setTimeout(res, 1200));
+    setProgressStage(2);
+    setProgressVisible(false);
+    if (created) {
       navigation.replace('CaseDetail', { caseId: payload.id });
+    } else {
+      navigation.goBack();
     }
   }, [canSubmit, caseId, clientName, oppositePartyName, caseDetails, dispatch, navigation]);
 
@@ -110,6 +134,24 @@ export default function CreateCaseScreen() {
       ),
     });
   }, [navigation, caseId, canSubmit, onSubmit]);
+
+  // Track entry point when opening Add Case (create only)
+  useEffect(() => {
+    if (!caseId) {
+      try {
+        logGenericEvent('add_case_open', {
+          source: routeSource || 'unknown',
+        });
+      } catch {}
+    }
+  }, [caseId]);
+
+  // Preload native ad on screen entry (no-op if SDK missing)
+  useEffect(() => {
+    registerAdRepository();
+  }, []);
+
+  const OverlayAd = useMemo(() => () => <NativeAdCard repository={AD_REPO_ID} />, []);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -167,6 +209,7 @@ export default function CreateCaseScreen() {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
+      <SavingSyncOverlay visible={progressVisible} stage={progressStage} AdComponent={OverlayAd} />
     </SafeAreaView>
   );
 }

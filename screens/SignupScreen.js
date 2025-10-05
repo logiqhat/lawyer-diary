@@ -17,6 +17,8 @@ import { auth } from '../firebase';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import colors from '../theme/colors';
 import { logAuthEvent } from '../services/analytics';
+import { ensureKey } from '../services/vault';
+import { isEncryptionEnabled } from '../services/remoteConfig';
 
 export default function SignupScreen({ navigation }) {
   const [email, setEmail] = useState('');
@@ -52,6 +54,8 @@ export default function SignupScreen({ navigation }) {
     try {
       await createUserWithEmailAndPassword(auth, trimmedEmail, password);
       logAuthEvent('signup', 'success', { method: 'password' });
+      // Generate & upload user DEK on first signup if encryption is enabled
+      try { if (await isEncryptionEnabled()) await ensureKey(); } catch (e) { console.warn('Key setup on signup failed:', e?.message || e) }
       try {
         await signOut(auth);
       } catch (signOutError) {

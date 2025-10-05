@@ -11,6 +11,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import Screen from '../components/Screen';
 import { useNavigation } from '@react-navigation/native';
+import { logTap } from '../services/analytics';
 import colors from '../theme/colors';
 
 export default function ListCasesScreen() {
@@ -19,12 +20,13 @@ export default function ListCasesScreen() {
 
   const renderItem = ({ item }) => (
     <TouchableOpacity
-      onPress={() =>
+      onPress={() => {
+        try { logTap('case_item', { caseId: String(item.id || '') }); } catch {}
         navigation.navigate('CaseDetail', {
           caseId: item.id,
           title: item.title,
-        })
-      }
+        });
+      }}
       style={styles.touchable}
     >
       <View style={styles.itemContainer}>
@@ -51,7 +53,7 @@ export default function ListCasesScreen() {
       <TouchableOpacity
         style={styles.primaryButton}
         activeOpacity={0.9}
-        onPress={() => navigation.navigate('CreateCase')}
+        onPress={() => { try { logTap('add_case_button', { location: 'list_empty' }); } catch {}; navigation.navigate('CreateCase', { source: 'list_empty' }); }}
       >
         <Ionicons name="add" size={18} color={colors.primaryOnPrimary} />
         <Text style={styles.primaryButtonText}>Add Case</Text>

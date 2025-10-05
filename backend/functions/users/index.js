@@ -3,9 +3,58 @@ const { ok, parseBool, doc, log, getUserId } = require('/opt/nodejs/shared');
 exports.handler = async (event) => {
   try {
     const method = event.requestContext?.http?.method || 'UNKNOWN';
+    const path = event.rawPath || '/users';
     const jwt = event.requestContext?.authorizer?.jwt?.claims || {};
     const userId = getUserId(event);
 
+    // -------------------- /users/key --------------------
+    if (path === '/users/key') {
+      if (method === 'GET') {
+        // fetch DEK for current user
+        const res = await doc.get({ TableName: process.env.USERS_TABLE, Key: { userId } }).promise();
+        const item = res?.Item || null;
+        if (!item || !item.dekHex) {
+          return { statusCode: 404, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'Not Found' }) };
+        }
+        return ok({ key_hex: String(item.dekHex), version: Number(item.dekVersion || 1) });
+      }
+      if (method === 'POST') {
+        const body = event.body ? JSON.parse(event.body) : {};
+        const keyHex = String(body.key_hex || '').trim();
+        const version = Number(body.version || 1);
+        if (!keyHex || !/^[0-9a-fA-F]{64}$/.test(keyHex)) {
+          return { statusCode: 400, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'invalid_key' }) };
+        }
+        const now = Date.now();
+        const update = {
+          TableName: process.env.USERS_TABLE,
+          Key: { userId },
+          UpdateExpression: 'SET #dekHex = :k, #dekVersion = :v, #dekUpdatedAt = :dua, #dekUpdatedAtMs = :dums, #updatedAt = :ua, #updatedAtMs = :ums',
+          ExpressionAttributeNames: {
+            '#dekHex': 'dekHex',
+            '#dekVersion': 'dekVersion',
+            '#dekUpdatedAt': 'dekUpdatedAt',
+            '#dekUpdatedAtMs': 'dekUpdatedAtMs',
+            '#updatedAt': 'updatedAt',
+            '#updatedAtMs': 'updatedAtMs',
+          },
+          ExpressionAttributeValues: {
+            ':k': keyHex,
+            ':v': version,
+            ':dua': new Date(now).toISOString(),
+            ':dums': now,
+            ':ua': new Date(now).toISOString(),
+            ':ums': now,
+          },
+          ReturnValues: 'ALL_NEW',
+        };
+        await doc.update(update).promise();
+        return ok({ ok: true });
+      }
+      return { statusCode: 405, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'Method Not Allowed' }) };
+    }
+
+    // -------------------- /users (profile upsert) --------------------
     if (method !== 'POST') return { statusCode: 405, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'Method Not Allowed' }) };
 
     const body = event.body ? JSON.parse(event.body) : {};

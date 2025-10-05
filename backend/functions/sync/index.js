@@ -60,9 +60,17 @@ exports.handler = async (event) => {
       const sinceMs = coerceMs(body.last_pulled_at || 0);
       const now = Date.now();
 
-      // Fetch only minimal fields first
-      const caseKeys = await queryAllByUser(process.env.CASES_TABLE, userId, 'id, createdAt, createdAtMs, updatedAt, updatedAtMs, deleted, clientName, oppositePartyName, title, details');
-      const dateKeys = await queryAllByUser(process.env.CASE_DATES_TABLE, userId, 'id, caseId, eventDate, notes, createdAt, createdAtMs, updatedAt, updatedAtMs, deleted');
+      // Fetch only minimal fields first, include encrypted fields if present
+      const caseKeys = await queryAllByUser(
+        process.env.CASES_TABLE,
+        userId,
+        'id, createdAt, createdAtMs, updatedAt, updatedAtMs, deleted, clientName, oppositePartyName, title, details, clientNameEnc, oppositePartyNameEnc, titleEnc, detailsEnc'
+      );
+      const dateKeys = await queryAllByUser(
+        process.env.CASE_DATES_TABLE,
+        userId,
+        'id, caseId, eventDate, notes, notesEnc, createdAt, createdAtMs, updatedAt, updatedAtMs, deleted'
+      );
 
       const cases = partitionChanges(caseKeys, sinceMs, 'cases');
       const case_dates = partitionChanges(dateKeys, sinceMs, 'case_dates');
@@ -184,6 +192,11 @@ exports.handler = async (event) => {
             continue;
           }
           const item = sanitizeCase({ ...c, userId });
+          // Attach encrypted fields if provided by client
+          if (c.clientNameEnc) item.clientNameEnc = c.clientNameEnc;
+          if (c.oppositePartyNameEnc) item.oppositePartyNameEnc = c.oppositePartyNameEnc;
+          if (c.titleEnc) item.titleEnc = c.titleEnc;
+          if (c.detailsEnc) item.detailsEnc = c.detailsEnc;
           try {
             await doc.put({ TableName: process.env.CASES_TABLE, Item: item, ConditionExpression: 'attribute_not_exists(userId) AND attribute_not_exists(id)' }).promise();
             if (remainingCases !== Infinity) remainingCases -= 1;
@@ -192,7 +205,7 @@ exports.handler = async (event) => {
             const up = buildCaseUpdate(c);
             const incMs = coerceMs(c.updatedAtMs || c.updatedAt);
             try {
-              await doc.update({
+              const updateReq = {
                 TableName: process.env.CASES_TABLE,
                 Key: { userId, id: c.id },
                 ...up,
@@ -200,7 +213,15 @@ exports.handler = async (event) => {
                 ExpressionAttributeNames: { ...up.ExpressionAttributeNames, '#updatedAtMs': 'updatedAtMs' },
                 ExpressionAttributeValues: { ...up.ExpressionAttributeValues, ':inc': incMs },
                 ReturnValues: 'NONE',
-              }).promise();
+              };
+              // Extend update with encrypted fields if provided
+              const encSet = [];
+              if (c.clientNameEnc) { updateReq.ExpressionAttributeNames['#clientNameEnc'] = 'clientNameEnc'; updateReq.ExpressionAttributeValues[':clientNameEnc'] = c.clientNameEnc; encSet.push('#clientNameEnc = :clientNameEnc'); }
+              if (c.oppositePartyNameEnc) { updateReq.ExpressionAttributeNames['#oppositePartyNameEnc'] = 'oppositePartyNameEnc'; updateReq.ExpressionAttributeValues[':oppositePartyNameEnc'] = c.oppositePartyNameEnc; encSet.push('#oppositePartyNameEnc = :oppositePartyNameEnc'); }
+              if (c.titleEnc) { updateReq.ExpressionAttributeNames['#titleEnc'] = 'titleEnc'; updateReq.ExpressionAttributeValues[':titleEnc'] = c.titleEnc; encSet.push('#titleEnc = :titleEnc'); }
+              if (c.detailsEnc) { updateReq.ExpressionAttributeNames['#detailsEnc'] = 'detailsEnc'; updateReq.ExpressionAttributeValues[':detailsEnc'] = c.detailsEnc; encSet.push('#detailsEnc = :detailsEnc'); }
+              if (encSet.length) updateReq.UpdateExpression += ', ' + encSet.join(', ');
+              await doc.update(updateReq).promise();
             } catch (err) {
               // ignore conditional failures
             }
@@ -226,7 +247,7 @@ exports.handler = async (event) => {
           try {
             const incMs = coerceMs(c.updatedAtMs || c.updatedAt);
             const up = buildCaseUpdate(c);
-            await doc.update({
+            const updateReq = {
               TableName: process.env.CASES_TABLE,
               Key: { userId, id: c.id },
               ...up,
@@ -234,7 +255,15 @@ exports.handler = async (event) => {
               ExpressionAttributeNames: { ...up.ExpressionAttributeNames, '#updatedAtMs': 'updatedAtMs' },
               ExpressionAttributeValues: { ...up.ExpressionAttributeValues, ':inc': incMs },
               ReturnValues: 'NONE',
-            }).promise();
+            };
+            // Extend with encrypted fields if present
+            const encSet = [];
+            if (c.clientNameEnc) { updateReq.ExpressionAttributeNames['#clientNameEnc'] = 'clientNameEnc'; updateReq.ExpressionAttributeValues[':clientNameEnc'] = c.clientNameEnc; encSet.push('#clientNameEnc = :clientNameEnc'); }
+            if (c.oppositePartyNameEnc) { updateReq.ExpressionAttributeNames['#oppositePartyNameEnc'] = 'oppositePartyNameEnc'; updateReq.ExpressionAttributeValues[':oppositePartyNameEnc'] = c.oppositePartyNameEnc; encSet.push('#oppositePartyNameEnc = :oppositePartyNameEnc'); }
+            if (c.titleEnc) { updateReq.ExpressionAttributeNames['#titleEnc'] = 'titleEnc'; updateReq.ExpressionAttributeValues[':titleEnc'] = c.titleEnc; encSet.push('#titleEnc = :titleEnc'); }
+            if (c.detailsEnc) { updateReq.ExpressionAttributeNames['#detailsEnc'] = 'detailsEnc'; updateReq.ExpressionAttributeValues[':detailsEnc'] = c.detailsEnc; encSet.push('#detailsEnc = :detailsEnc'); }
+            if (encSet.length) updateReq.UpdateExpression += ', ' + encSet.join(', ');
+            await doc.update(updateReq).promise();
           } catch {}
         }
         // deleted
@@ -291,6 +320,7 @@ exports.handler = async (event) => {
             }
           }
           const item = sanitizeDate({ ...d, userId });
+          if (d.notesEnc) item.notesEnc = d.notesEnc;
           try {
             await doc.put({ TableName: process.env.CASE_DATES_TABLE, Item: item, ConditionExpression: 'attribute_not_exists(userId) AND attribute_not_exists(id)' }).promise();
             if (countsByCase[d.caseId] !== undefined) countsByCase[d.caseId] += 1;
@@ -298,7 +328,7 @@ exports.handler = async (event) => {
             const up = buildDateUpdate(d);
             const incMs = coerceMs(d.updatedAtMs || d.updatedAt);
             try {
-              await doc.update({
+              const updateReq = {
                 TableName: process.env.CASE_DATES_TABLE,
                 Key: { userId, id: d.id },
                 ...up,
@@ -306,7 +336,13 @@ exports.handler = async (event) => {
                 ExpressionAttributeNames: { ...up.ExpressionAttributeNames, '#updatedAtMs': 'updatedAtMs' },
                 ExpressionAttributeValues: { ...up.ExpressionAttributeValues, ':inc': incMs },
                 ReturnValues: 'NONE',
-              }).promise();
+              };
+              if (d.notesEnc) {
+                updateReq.ExpressionAttributeNames['#notesEnc'] = 'notesEnc';
+                updateReq.ExpressionAttributeValues[':notesEnc'] = d.notesEnc;
+                updateReq.UpdateExpression += ', #notesEnc = :notesEnc';
+              }
+              await doc.update(updateReq).promise();
             } catch (err) {
               // ignore conditional failures
             }
@@ -334,7 +370,7 @@ exports.handler = async (event) => {
             }
             const incMs = coerceMs(d.updatedAtMs || d.updatedAt);
             const up = buildDateUpdate(d);
-            await doc.update({
+            const updateReq = {
               TableName: process.env.CASE_DATES_TABLE,
               Key: { userId, id: d.id },
               ...up,
@@ -342,7 +378,13 @@ exports.handler = async (event) => {
               ExpressionAttributeNames: { ...up.ExpressionAttributeNames, '#updatedAtMs': 'updatedAtMs' },
               ExpressionAttributeValues: { ...up.ExpressionAttributeValues, ':inc': incMs },
               ReturnValues: 'NONE',
-            }).promise();
+            };
+            if (d.notesEnc) {
+              updateReq.ExpressionAttributeNames['#notesEnc'] = 'notesEnc';
+              updateReq.ExpressionAttributeValues[':notesEnc'] = d.notesEnc;
+              updateReq.UpdateExpression += ', #notesEnc = :notesEnc';
+            }
+            await doc.update(updateReq).promise();
           } catch {}
         }
         for (const id of (changes.case_dates.deleted || [])) {

@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "LawyerDiary",
-    "slug": "LawyerDiary",
+    "slug": "lawyer-diary",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -18,12 +18,18 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
+        "foregroundImage": "./assets/adaptive-foreground.png",
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
+      "versionCode": 1,
       "package": "com.logiqhat.lawyerdiary",
-      "googleServicesFile": "./google-services.json"
+      "googleServicesFile": "./google-services.json",
+      "permissions": [
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.INTERNET"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -34,13 +40,23 @@
       "googleIosClientId": "YOUR_IOS_CLIENT_ID.apps.googleusercontent.com",
       "googleAndroidClientId": "YOUR_ANDROID_CLIENT_ID.apps.googleusercontent.com",
       "dbProvider": "watermelon",
-      "apiBaseUrl": "https://736n3vmsa4.execute-api.us-east-1.amazonaws.com"
+      "apiBaseUrl": "https://736n3vmsa4.execute-api.us-east-1.amazonaws.com",
+      "admob": {
+        "appIdAndroid": "ca-app-pub-3940256099942544/2247696110",
+        "appIdIOS": "ca-app-pub-3940256099942544/3986624511",
+        "nativeAdUnitAndroid": "ca-app-pub-3940256099942544/2247696110",
+        "nativeAdUnitIOS": "ca-app-pub-3940256099942544/3986624511"
+      },
+      "eas": {
+        "projectId": "d4f59263-0892-46dc-8bf6-6ea88df31394"
+      }
     },
     "plugins": [
       "expo-sqlite",
       "expo-web-browser",
       "expo-file-system",
-      "@react-native-google-signin/google-signin"
+      "@react-native-google-signin/google-signin",
+      "./plugins/withAdServicesConfig"
     ]
   }
 }

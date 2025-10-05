@@ -1,28 +1,19 @@
 import React, { createContext, useContext, useEffect, useState } from 'react'
+import { loadRemoteFlags } from '../services/remoteConfig'
 
-const Ctx = createContext({ showUsageSummary: false, ready: false })
+const Ctx = createContext({ showUsageSummary: false, encryptionEnabled: false, ready: false })
 
 export function FeatureFlagsProvider({ children }) {
-  const [flags, setFlags] = useState({ showUsageSummary: false })
+  const [flags, setFlags] = useState({ showUsageSummary: false, encryptionEnabled: false })
   const [ready, setReady] = useState(false)
 
   useEffect(() => {
     (async () => {
       try {
-        // Dynamically require to avoid hard crash if module isn't installed yet
-        const mod = require('@react-native-firebase/remote-config')
-        const rc = mod?.default ? mod.default() : mod()
-        // Default values (global)
-        await rc.setDefaults({ show_usage_summary: false })
-        // Fetch once on app launch; no caching in dev for easier testing
-        await rc.setConfigSettings({ minimumFetchIntervalMillis: __DEV__ ? 0 : 60 * 60 * 1000 })
-        const activated = await rc.fetchAndActivate()
-        const show = rc.getValue('show_usage_summary').asBoolean()
-        try { console.log('[RemoteConfig]', { activated, show_usage_summary: show }) } catch {}
-        setFlags({ showUsageSummary: show })
-      } catch (e) {
-        // If Remote Config is unavailable, keep defaults
-        setFlags({ showUsageSummary: false })
+        const { showUsageSummary, encryptionEnabled } = await loadRemoteFlags()
+        setFlags({ showUsageSummary, encryptionEnabled })
+      } catch {
+        setFlags({ showUsageSummary: false, encryptionEnabled: false })
       } finally {
         setReady(true)
       }

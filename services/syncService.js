@@ -3,6 +3,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 import { usingWatermelon } from '../config/featureFlags'
 import { apiClient } from './apiClient'
 import { auth } from '../firebase'
+import { ensureKey, encryptCaseServer, encryptDateServer, decryptCaseServer, decryptDateServer } from './vault'
+import { isEncryptionEnabled } from './remoteConfig'
 
 let synchronize = null
 let getWatermelonDatabase = null
@@ -89,6 +91,14 @@ async function setLastPulledAt(ms) {
 export async function syncNow() {
   if (!usingWatermelon()) return false
   if (!auth?.currentUser) return false
+  // Ensure encryption key exists if feature is enabled. Non-fatal on failure.
+  try {
+    if (await isEncryptionEnabled()) {
+      await ensureKey()
+    }
+  } catch (e) {
+    console.warn('Encryption key not available; proceeding without decryption:', e?.message || e)
+  }
 
   // Lazy import to avoid bundling when not used
   if (!synchronize) {
@@ -121,15 +131,53 @@ export async function syncNow() {
       const since = typeof lastPulledAt === 'number' ? lastPulledAt : (lastSaved || 0)
       const { data } = await apiClient.post('/sync/pull', { body: { last_pulled_at: since } })
       const { changes, timestamp } = data || {}
+      // Decrypt if encrypted fields present; otherwise accept plaintext for compat
+      const decCases = []
+      for (const s of (changes?.cases?.created || [])) {
+        if (s && (s.clientNameEnc || s.oppositePartyNameEnc || s.titleEnc || s.detailsEnc)) {
+          // eslint-disable-next-line no-await-in-loop
+          decCases.push(await decryptCaseServer(s))
+        } else {
+          decCases.push(s)
+        }
+      }
+      const updCases = []
+      for (const s of (changes?.cases?.updated || [])) {
+        if (s && (s.clientNameEnc || s.oppositePartyNameEnc || s.titleEnc || s.detailsEnc)) {
+          // eslint-disable-next-line no-await-in-loop
+          updCases.push(await decryptCaseServer(s))
+        } else {
+          updCases.push(s)
+        }
+      }
+      const decDates = []
+      for (const s of (changes?.case_dates?.created || [])) {
+        if (s && s.notesEnc) {
+          // eslint-disable-next-line no-await-in-loop
+          decDates.push(await decryptDateServer(s))
+        } else {
+          decDates.push(s)
+        }
+      }
+      const updDates = []
+      for (const s of (changes?.case_dates?.updated || [])) {
+        if (s && s.notesEnc) {
+          // eslint-disable-next-line no-await-in-loop
+          updDates.push(await decryptDateServer(s))
+        } else {
+          updDates.push(s)
+        }
+      }
+
       const wmChanges = {
         cases: {
-          created: (changes?.cases?.created || []).map(toWmCase),
-          updated: (changes?.cases?.updated || []).map(toWmCase),
+          created: decCases.map(toWmCase),
+          updated: updCases.map(toWmCase),
           deleted: changes?.cases?.deleted || [],
         },
         case_dates: {
-          created: (changes?.case_dates?.created || []).map(toWmDate),
-          updated: (changes?.case_dates?.updated || []).map(toWmDate),
+          created: decDates.map(toWmDate),
+          updated: updDates.map(toWmDate),
           deleted: changes?.case_dates?.deleted || [],
         },
       }
@@ -142,18 +190,42 @@ export async function syncNow() {
         last_pulled_at: lastPulledAt || (await getLastPulledAt()) || 0,
         changes: {
           users: { created: [], updated: [], deleted: [] },
-          cases: {
-            created: (changes?.cases?.created || []).map(toServerCase),
-            updated: (changes?.cases?.updated || []).map(toServerCase),
-            deleted: changes?.cases?.deleted || [],
-          },
-          case_dates: {
-            created: (changes?.case_dates?.created || []).map(toServerDate),
-            updated: (changes?.case_dates?.updated || []).map(toServerDate),
-            deleted: changes?.case_dates?.deleted || [],
-          },
+          cases: { created: [], updated: [], deleted: changes?.cases?.deleted || [] },
+          case_dates: { created: [], updated: [], deleted: changes?.case_dates?.deleted || [] },
         },
       }
+
+      // Map Watermelon -> server and encrypt sensitive fields (eventDate, photoUri remain plaintext)
+      const encrypting = await isEncryptionEnabled()
+      if (encrypting) {
+        for (const r of (changes?.cases?.created || [])) {
+          const plain = toServerCase(r)
+          // eslint-disable-next-line no-await-in-loop
+          payload.changes.cases.created.push(await encryptCaseServer(plain))
+        }
+        for (const r of (changes?.cases?.updated || [])) {
+          const plain = toServerCase(r)
+          // eslint-disable-next-line no-await-in-loop
+          payload.changes.cases.updated.push(await encryptCaseServer(plain))
+        }
+        for (const r of (changes?.case_dates?.created || [])) {
+          const plain = toServerDate(r)
+          // eslint-disable-next-line no-await-in-loop
+          payload.changes.case_dates.created.push(await encryptDateServer(plain))
+        }
+        for (const r of (changes?.case_dates?.updated || [])) {
+          const plain = toServerDate(r)
+          // eslint-disable-next-line no-await-in-loop
+          payload.changes.case_dates.updated.push(await encryptDateServer(plain))
+        }
+      } else {
+        // Backward-compatible plaintext payloads
+        payload.changes.cases.created = (changes?.cases?.created || []).map(toServerCase)
+        payload.changes.cases.updated = (changes?.cases?.updated || []).map(toServerCase)
+        payload.changes.case_dates.created = (changes?.case_dates?.created || []).map(toServerDate)
+        payload.changes.case_dates.updated = (changes?.case_dates?.updated || []).map(toServerDate)
+      }
+
       await apiClient.post('/sync/push', { body: payload })
     },
   })

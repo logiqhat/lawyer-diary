@@ -645,6 +645,23 @@ resource "aws_apigatewayv2_route" "post_users" {
   authorizer_id      = var.enforce_auth ? aws_apigatewayv2_authorizer.firebase.id : null
 }
 
+# Key management endpoints (reuse users Lambda)
+resource "aws_apigatewayv2_route" "get_users_key" {
+  api_id              = aws_apigatewayv2_api.http_api.id
+  route_key           = "GET /users/key"
+  target              = "integrations/${aws_apigatewayv2_integration.lambda_users.id}"
+  authorization_type  = var.enforce_auth ? "JWT" : "NONE"
+  authorizer_id       = var.enforce_auth ? aws_apigatewayv2_authorizer.firebase.id : null
+}
+
+resource "aws_apigatewayv2_route" "post_users_key" {
+  api_id              = aws_apigatewayv2_api.http_api.id
+  route_key           = "POST /users/key"
+  target              = "integrations/${aws_apigatewayv2_integration.lambda_users.id}"
+  authorization_type  = var.enforce_auth ? "JWT" : "NONE"
+  authorizer_id       = var.enforce_auth ? aws_apigatewayv2_authorizer.firebase.id : null
+}
+
 resource "aws_apigatewayv2_route" "post_sync_pull" {
   api_id              = aws_apigatewayv2_api.http_api.id
   route_key           = "POST /sync/pull"

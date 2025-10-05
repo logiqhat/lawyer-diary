@@ -34,6 +34,7 @@ import { PaperProvider } from 'react-native-paper';
 import ActionSheetModal from './components/ActionSheetModal';
 import colors from './theme/colors';
 import analytics from '@react-native-firebase/analytics';
+import { logTap } from './services/analytics';
 import { usingWatermelon } from './config/featureFlags';
 import { useWatermelonSync } from './hooks/useWatermelonSync';
 import { apiClient } from './services/apiClient';
@@ -41,6 +42,8 @@ import { UserSettingsProvider, useUserSettings } from './context/UserSettingsCon
 import { FeatureFlagsProvider } from './context/FeatureFlagsContext';
 import { registerForFcmTokenAsync } from './services/pushNotificationsFcm';
 import { impactLight } from './utils/haptics';
+import { ensureKey } from './services/vault';
+import { isEncryptionEnabled } from './services/remoteConfig';
 
 // ——— navigation helper ———
 const navigationRef = createNavigationContainerRef();
@@ -181,6 +184,15 @@ function AppInner() {
           },
         })
         .catch((e) => console.warn('Users upsert failed', e?.message || e));
+
+      // Ensure encryption key exists if feature enabled
+      try {
+        if (await isEncryptionEnabled()) {
+          await ensureKey()
+        }
+      } catch (e) {
+        console.warn('User encryption key setup failed:', e?.message || e)
+      }
     })();
   }, [authReady, currentUser]);
 
@@ -252,8 +264,9 @@ function AppInner() {
                 style={[props.style, styles.fabButton]}
                 onPress={() => {
                   try { impactLight(); } catch {}
+                  try { logTap('fab_add', { location: 'main_tabs' }); } catch {}
                   if (caseCount === 0) {
-                    navigate('CreateCase');
+                    navigate('CreateCase', { source: 'fab' });
                   } else {
                     setModalVisible(true);
                   }
@@ -368,8 +381,8 @@ function AppInner() {
                 onClose={() => setModalVisible(false)}
                 title="What would you like to add?"
                 actions={[
-                  { label: 'Add Case', onPress: () => navigate('CreateCase') },
-                  { label: 'Add Date', onPress: () => navigate('AddDate') },
+                  { label: 'Add Case', onPress: () => navigate('CreateCase', { source: 'fab' }) },
+                  { label: 'Add Date', onPress: () => navigate('AddDate', { source: 'fab' }) },
                 ]}
                 showCancelButton={false}
               />

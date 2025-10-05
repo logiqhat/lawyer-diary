@@ -1,5 +1,7 @@
 import messaging from '@react-native-firebase/messaging'
-import { Platform, PermissionsAndroid } from 'react-native'
+import { Platform, PermissionsAndroid, Alert } from 'react-native'
+import AsyncStorage from '@react-native-async-storage/async-storage'
+import { apiClient } from './apiClient'
 
 export async function registerForFcmTokenAsync() {
   try {
@@ -20,3 +22,49 @@ export async function registerForFcmTokenAsync() {
   }
 }
 
+// Prompt user after first successful date add; ask permission and register token.
+// Returns true if the prompt was shown (regardless of user choice), false if skipped.
+export async function promptNotificationsAfterDateAdded() {
+  try {
+    const KEY = 'notif:askedAfterDate'
+    const asked = await AsyncStorage.getItem(KEY)
+    if (asked === '1') return false
+
+    return await new Promise((resolve) => {
+      try {
+        Alert.alert(
+          'Enable Notifications?',
+          'We will notify you one day before your upcoming dates. Allow notifications?',
+          [
+            { text: 'Not now', style: 'cancel', onPress: async () => { try { await AsyncStorage.setItem(KEY, '1') } catch {}; resolve(true) } },
+            {
+              text: 'Allow notifications',
+              style: 'default',
+              onPress: async () => {
+                try {
+                  const token = await registerForFcmTokenAsync()
+                  if (token) {
+                    try { await apiClient.post('/users', { body: { fcmToken: token, notifyEnabled: true } }) } catch {}
+                  }
+                } catch (e) {
+                  console.warn('Notification permission flow failed', e?.message || e)
+                } finally {
+                  try { await AsyncStorage.setItem(KEY, '1') } catch {}
+                  resolve(true)
+                }
+              }
+            },
+          ],
+          { cancelable: true }
+        )
+      } catch (e) {
+        // If Alert fails, still set asked to avoid loops
+        try { AsyncStorage.setItem(KEY, '1') } catch {}
+        resolve(false)
+      }
+    })
+  } catch (e) {
+    console.warn('promptNotificationsAfterDateAdded error', e?.message || e)
+    return false
+  }
+}

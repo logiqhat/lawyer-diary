@@ -176,7 +176,7 @@ export default function CaseCalendar() {
         <View style={styles.addBarWrap}>
           <TouchableOpacity
             style={[styles.addBtn, styles.addBtnFull]}
-            onPress={() => { try { impactLight(); } catch {}; navigation.navigate('AddDate', { eventDate: selectedDate }) }}
+            onPress={() => { try { impactLight(); } catch {}; navigation.navigate('AddDate', { eventDate: selectedDate, source: 'calendar' }) }}
             activeOpacity={0.9}
             accessibilityRole="button"
             accessibilityLabel="Add Date"

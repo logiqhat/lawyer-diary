@@ -32,3 +32,11 @@ function sanitizeParams(params = {}) {
 export function logGenericEvent(name, params) {
   return safeLogEvent(name, sanitizeParams(params));
 }
+
+export function logUiEvent(action, element, props = {}) {
+  return safeLogEvent('ui_event', sanitizeParams({ action, element, ...props }));
+}
+
+export function logTap(element, props = {}) {
+  return logUiEvent('tap', element, props);
+}

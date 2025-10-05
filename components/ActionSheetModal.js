@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import colors from '../theme/colors';
+import { logUiEvent } from '../services/analytics';
 
 /**
  * Props (unchanged):
@@ -37,6 +38,13 @@ export default function ActionSheetModal({
 
   const handlePress = (action) => {
     const { onPress, autoCloseFirst = true } = action;
+    try {
+      logUiEvent('select', 'action_sheet_item', {
+        title: title || '',
+        label: String(action?.label || ''),
+        variant: action?.variant || 'default',
+      });
+    } catch {}
     if (autoCloseFirst) onClose?.();
     try { onPress?.(); } finally {
       if (!autoCloseFirst) onClose?.();

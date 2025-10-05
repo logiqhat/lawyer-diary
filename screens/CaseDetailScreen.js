@@ -235,7 +235,7 @@ export default function CaseDetailScreen() {
           styles.fabExtended,
           { bottom: Math.max(24, insets.bottom + 16) },
         ]}
-        onPress={() => { try { impactLight(); } catch {}; navigation.navigate('AddDate', { caseId }) }}
+        onPress={() => { try { impactLight(); } catch {}; navigation.navigate('AddDate', { caseId, source: 'case_detail' }) }}
         activeOpacity={0.9}
         accessibilityRole="button"
         accessibilityLabel="Add Date"
