@@ -18,6 +18,15 @@ try {
   SecureStore = null
 }
 
+// Optional fallback: node-forge for AES-GCM if WebCrypto isn't available
+let Forge
+try {
+  // eslint-disable-next-line global-require
+  Forge = require('node-forge')
+} catch (_) {
+  Forge = null
+}
+
 const STORAGE_PREFIX = 'dek_v1_'
 const ENC_ALG = 'AES-GCM'
 const ENC_VERSION = 1
@@ -136,12 +145,42 @@ export async function encryptString(plaintext) {
   const iv = await getRandomBytes(12)
   const g = globalThis
   const subtle = g?.crypto?.subtle || g?.msCrypto?.subtle
-  if (!subtle) throw new Error('WebCrypto not available for encryption')
-  const key = await importAesKey(keyBytes)
   const enc = new TextEncoder().encode(text)
-  const ctBuf = await subtle.encrypt({ name: 'AES-GCM', iv }, key, enc)
-  const ct = new Uint8Array(ctBuf)
-  return { v: ENC_VERSION, alg: ENC_ALG, iv: bytesToHex(iv), ct: bytesToHex(ct) }
+  if (subtle) {
+    const key = await importAesKey(keyBytes)
+    const ctBuf = await subtle.encrypt({ name: 'AES-GCM', iv }, key, enc)
+    const ct = new Uint8Array(ctBuf)
+    return { v: ENC_VERSION, alg: ENC_ALG, iv: bytesToHex(iv), ct: bytesToHex(ct) }
+  }
+  // Fallback to node-forge AES-GCM if available
+  if (Forge?.cipher?.createCipher) {
+    // Convert Uint8Array -> forge raw bytes
+    const u8ToStr = (u8) => {
+      let s = ''
+      for (let i = 0; i < u8.length; i += 1) s += String.fromCharCode(u8[i])
+      return s
+    }
+    const keyRaw = u8ToStr(keyBytes)
+    const ivRaw = u8ToStr(iv)
+    const ptRaw = u8ToStr(enc)
+    const cipher = Forge.cipher.createCipher('AES-GCM', keyRaw)
+    cipher.start({ iv: ivRaw, tagLength: 128 })
+    cipher.update(Forge.util.createBuffer(ptRaw))
+    const ok = cipher.finish()
+    if (!ok) throw new Error('Encryption failed')
+    const ctRaw = cipher.output.getBytes()
+    const tagRaw = cipher.mode.tag.getBytes()
+    const combinedRaw = ctRaw + tagRaw
+    // Convert back to Uint8Array
+    const strToU8 = (str) => {
+      const out = new Uint8Array(str.length)
+      for (let i = 0; i < str.length; i += 1) out[i] = str.charCodeAt(i) & 0xff
+      return out
+    }
+    const ct = strToU8(combinedRaw)
+    return { v: ENC_VERSION, alg: ENC_ALG, iv: bytesToHex(iv), ct: bytesToHex(ct) }
+  }
+  throw new Error('No AES-GCM available. Install WebCrypto polyfill or node-forge.')
 }
 
 export async function decryptString(envelope) {
@@ -150,12 +189,44 @@ export async function decryptString(envelope) {
   const keyBytes = await getKeyBytes()
   const g = globalThis
   const subtle = g?.crypto?.subtle || g?.msCrypto?.subtle
-  if (!subtle) throw new Error('WebCrypto not available for decryption')
-  const key = await importAesKey(keyBytes)
   const ivBytes = hexToBytes(String(iv || ''))
   const ctBytes = hexToBytes(String(ct || ''))
-  const ptBuf = await subtle.decrypt({ name: 'AES-GCM', iv: ivBytes }, key, ctBytes)
-  return new TextDecoder().decode(ptBuf)
+  if (subtle) {
+    const key = await importAesKey(keyBytes)
+    const ptBuf = await subtle.decrypt({ name: 'AES-GCM', iv: ivBytes }, key, ctBytes)
+    return new TextDecoder().decode(ptBuf)
+  }
+  // Fallback to node-forge
+  if (Forge?.cipher?.createDecipher) {
+    const u8ToStr = (u8) => {
+      let s = ''
+      for (let i = 0; i < u8.length; i += 1) s += String.fromCharCode(u8[i])
+      return s
+    }
+    const strToU8 = (str) => {
+      const out = new Uint8Array(str.length)
+      for (let i = 0; i < str.length; i += 1) out[i] = str.charCodeAt(i) & 0xff
+      return out
+    }
+    const keyRaw = u8ToStr(keyBytes)
+    const ivRaw = u8ToStr(ivBytes)
+    // Split ct into ciphertext and tag (last 16 bytes)
+    if (ctBytes.length < 16) throw new Error('Invalid ciphertext')
+    const tagLen = 16
+    const ctOnly = ctBytes.subarray(0, ctBytes.length - tagLen)
+    const tagOnly = ctBytes.subarray(ctBytes.length - tagLen)
+    const ctRaw = u8ToStr(ctOnly)
+    const tagRaw = u8ToStr(tagOnly)
+    const decipher = Forge.cipher.createDecipher('AES-GCM', keyRaw)
+    decipher.start({ iv: ivRaw, tagLength: 128, tag: Forge.util.createBuffer(tagRaw).getBytes() })
+    decipher.update(Forge.util.createBuffer(ctRaw))
+    const ok = decipher.finish()
+    if (!ok) throw new Error('Decryption failed: auth tag mismatch')
+    const ptRaw = decipher.output.getBytes()
+    const pt = strToU8(ptRaw)
+    return new TextDecoder().decode(pt)
+  }
+  throw new Error('No AES-GCM available for decryption. Install WebCrypto polyfill or node-forge.')
 }
 
 // ——— Object helpers for server payloads ———
@@ -202,4 +273,3 @@ export async function decryptDateServer(obj) {
   if (obj.notesEnc) out.notes = await decryptString(obj.notesEnc)
   return out
 }
-
