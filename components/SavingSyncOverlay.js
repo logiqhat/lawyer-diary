@@ -1,20 +1,24 @@
 import React, { useEffect } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator, Keyboard } from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator, Keyboard, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import colors from '../theme/colors';
-import NativeAdCard from './NativeAdCard';
 
 // stage: 0 = saving active, 1 = saving done + syncing active, 2 = all done
 // mode: 'inline' (default) renders as an absolute full-screen overlay inside the current screen
 //       'modal' can be added later if needed
 // Default to no ad until AdMob is fully wired to avoid startup crashes
-export default function SavingSyncOverlay({ visible, stage = 0, onRequestClose, mode = 'inline', AdComponent = null }) {
+import { useState } from 'react';
+import { showTestInterstitialAsync } from '../services/interstitial'
+
+export default function SavingSyncOverlay({ visible, stage = 0, onRequestClose, mode = 'inline', showContinue = false, continueLabel = 'Continue', onContinue }) {
   // Hide the keyboard whenever this overlay becomes visible
   useEffect(() => {
     if (visible) {
       try { Keyboard.dismiss(); } catch {}
     }
   }, [visible]);
+
+  // No ads for now; overlay simply shows syncing state and a recommendation card
   if (!visible) return null;
 
   const savingDone = stage >= 1;
@@ -40,13 +44,35 @@ export default function SavingSyncOverlay({ visible, stage = 0, onRequestClose, 
         <Text style={styles.title}>Saving and syncing your data…</Text>
         <Row label="Saving changes" done={savingDone} active={!savingDone && stage === 0} />
         <Row label="Syncing with cloud" done={syncingDone} active={syncingActive} />
-        <Text style={styles.hint}>Please keep the app open. This may take a few seconds.</Text>
+        <Text style={styles.hint}>
+          {syncingDone ? 'All set! You can continue when ready.' : 'Please keep the app open. This may take a few seconds.'}
+        </Text>
       </View>
 
-      {/* Placeholder ad area. Pass an AdComponent later to render a native ad here. */}
-      <View style={styles.adArea}>
-        <AdComponent />
+      {/* Recommendation card in place of ads */}
+      <View style={styles.recommendCard}>
+        <View style={styles.recommendIconWrap}>
+          <Ionicons name="heart" size={22} color={colors.primaryOnPrimary} />
+        </View>
+        <Text style={styles.recommendTitle}>Enjoying LawyerDiary?</Text>
+        <Text style={styles.recommendSubtitle}>Recommend it to your friends and colleagues.</Text>
       </View>
+
+      {syncingDone && showContinue && (
+        <TouchableOpacity
+          style={styles.continueBtn}
+          onPress={async () => {
+            // Try to show interstitial; proceed regardless of result
+            try { await showTestInterstitialAsync() } catch {}
+            onContinue && onContinue()
+          }}
+          activeOpacity={0.9}
+          accessibilityRole="button"
+          accessibilityLabel={continueLabel}
+        >
+          <Text style={styles.continueLabel}>{continueLabel}</Text>
+        </TouchableOpacity>
+      )}
     </View>
   );
 }
@@ -62,7 +88,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 28,
     paddingBottom: 16,
-    justifyContent: 'space-between',
+    justifyContent: 'flex-start',
     zIndex: 999,
   },
   topSection: {
@@ -114,6 +140,50 @@ const styles = StyleSheet.create({
   },
   adText: {
     color: colors.textSecondary,
+  },
+  recommendCard: {
+    width: '96%',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+    backgroundColor: colors.surface,
+    paddingVertical: 16,
+    paddingHorizontal: 14,
+    alignSelf: 'center',
+    alignItems: 'center',
+    marginTop: 16,
+  },
+  recommendIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.iconMuted,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
+  recommendTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: colors.textPrimary,
+  },
+  recommendSubtitle: {
+    marginTop: 6,
+    fontSize: 13,
+    color: colors.textSecondary,
+    textAlign: 'center',
+  },
+  continueBtn: {
+    backgroundColor: colors.primary,
+    borderRadius: 10,
+    paddingVertical: 12,
+    alignItems: 'center',
+    marginTop: 12,
+  },
+  continueLabel: {
+    color: colors.primaryOnPrimary,
+    fontSize: 16,
+    fontWeight: '700',
   },
   footer: {
     alignItems: 'center',

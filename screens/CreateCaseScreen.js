@@ -22,8 +22,6 @@ import { impactLight, successNotify } from '../utils/haptics';
 import { logGenericEvent } from '../services/analytics';
 import { syncIfWatermelon } from '../services/syncService';
 import SavingSyncOverlay from '../components/SavingSyncOverlay';
-import NativeAdCard from '../components/NativeAdCard';
-import { AD_REPO_ID, registerAdRepository } from '../services/admobNative';
 
 export default function CreateCaseScreen() {
   const dispatch   = useDispatch();
@@ -65,6 +63,8 @@ export default function CreateCaseScreen() {
   const canSubmit = requiredOk && withinLimits && (!isEditing || isDirty);
   const [progressVisible, setProgressVisible] = useState(false);
   const [progressStage, setProgressStage] = useState(0); // 0 saving, 1 syncing, 2 done
+  const [awaitingContinue, setAwaitingContinue] = useState(false);
+  const [nextNav, setNextNav] = useState(null);
 
   const onSubmit = useCallback(async () => {
     if (!canSubmit) return;
@@ -98,15 +98,10 @@ export default function CreateCaseScreen() {
     setProgressStage(1);
     setProgressVisible(true);
     try { syncIfWatermelon(); } catch {}
-    // Ensure the overlay shows for at least 1200ms regardless of sync duration
     await new Promise((res) => setTimeout(res, 1200));
     setProgressStage(2);
-    setProgressVisible(false);
-    if (created) {
-      navigation.replace('CaseDetail', { caseId: payload.id });
-    } else {
-      navigation.goBack();
-    }
+    setAwaitingContinue(true);
+    setNextNav(created ? { type: 'case', caseId: payload.id } : { type: 'back' });
   }, [canSubmit, caseId, clientName, oppositePartyName, caseDetails, dispatch, navigation]);
 
   // Header title + right Save/Update button
@@ -146,12 +141,7 @@ export default function CreateCaseScreen() {
     }
   }, [caseId]);
 
-  // Preload native ad on screen entry (no-op if SDK missing)
-  useEffect(() => {
-    registerAdRepository();
-  }, []);
-
-  const OverlayAd = useMemo(() => () => <NativeAdCard repository={AD_REPO_ID} />, []);
+  // Ads removed for now
 
   return (
     <SafeAreaView style={styles.container}>
@@ -209,7 +199,21 @@ export default function CreateCaseScreen() {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
-      <SavingSyncOverlay visible={progressVisible} stage={progressStage} AdComponent={OverlayAd} />
+      <SavingSyncOverlay
+        visible={progressVisible}
+        stage={progressStage}
+        showContinue={awaitingContinue}
+        continueLabel="Continue"
+        onContinue={() => {
+          setProgressVisible(false);
+          setAwaitingContinue(false);
+          const target = nextNav;
+          setNextNav(null);
+          if (!target) return;
+          if (target.type === 'case') navigation.replace('CaseDetail', { caseId: target.caseId });
+          else navigation.goBack();
+        }}
+      />
     </SafeAreaView>
   );
 }

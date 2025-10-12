@@ -29,12 +29,11 @@ export async function loadRemoteFlags() {
     await ensureSettings(rc)
     const activated = await rc.fetchAndActivate()
     const show = rc.getValue('show_usage_summary').asBoolean()
-    const enc = rc.getValue('enable_client_encryption').asBoolean()
-    cached = { showUsageSummary: !!show, encryptionEnabled: !!enc, loaded: true }
+    // Force encryption disabled for now
+    cached = { showUsageSummary: !!show, encryptionEnabled: false, loaded: true }
     try { console.log('[RemoteConfig]', { activated, ...cached }) } catch {}
-    return { showUsageSummary: !!show, encryptionEnabled: !!enc }
+    return { showUsageSummary: !!show, encryptionEnabled: false }
   } catch (e) {
-    // Keep defaults on failure
     cached.loaded = true
     return { showUsageSummary: false, encryptionEnabled: false }
   }
@@ -55,17 +54,9 @@ export function getRemoteFlags() {
 }
 
 export async function isEncryptionEnabled() {
-  if (cached.loaded) return cached.encryptionEnabled
-  try {
-    const rc = getRc()
-    await ensureDefaults(rc)
-    const v = rc.getValue('enable_client_encryption')
-    return typeof v?.asBoolean === 'function' ? v.asBoolean() : !!v
-  } catch {
-    return false
-  }
+  // Enable client-side encryption
+  return true
 }
 
 // For tests
 export function __resetRemoteConfigCacheForTests() { cached = { showUsageSummary: false, encryptionEnabled: false, loaded: false } }
-

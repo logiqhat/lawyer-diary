@@ -24,7 +24,9 @@ export function registerAdRepository({ adUnitIdAndroid = (extraAdmob.nativeAdUni
   if (global.__adRepoRegistered) return true;
   const adUnitId = Platform.select({ ios: adUnitIdIOS, android: adUnitIdAndroid });
   try {
-    AdManager.registerRepository(AD_REPO_ID, {
+    // Library expects a single config object with `name` and `adUnitId`
+    AdManager.registerRepository({
+      name: AD_REPO_ID,
       adUnitId,
       numOfAds: 1,
       prefetch: 1,

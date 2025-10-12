@@ -1,5 +1,5 @@
 // src/screens/CaseDetailScreen.js
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -18,6 +18,7 @@ import { removeCase } from '../store/casesSlice';
 import { parseYMDLocal } from '../utils/dateFmt';
 import colors from '../theme/colors';
 import { impactLight, warningNotify } from '../utils/haptics';
+import { promptNotificationsAfterDateAdded } from '../services/pushNotificationsFcm';
 
 const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
@@ -63,12 +64,24 @@ export default function CaseDetailScreen() {
   const dates = useSelector((state) => state.caseDates?.items || [])
     .filter((d) => d.caseId === caseId)
     .sort((a, b) => parseYMDLocal(a.eventDate) - parseYMDLocal(b.eventDate));
+  const totalDates = useSelector((state) => state.caseDates?.items?.length || 0);
 
   const pageTitle =
     routeTitle ||
     `${caseItem.clientName || 'Client'} vs ${caseItem.oppositePartyName || 'Opposing party'}`;
 
   const [actionSheetVisible, setActionSheetVisible] = useState(false);
+
+  // After the very first date is added in the app, politely ask on the Case Details screen.
+  useEffect(() => {
+    (async () => {
+      try {
+        if (totalDates === 1) {
+          await promptNotificationsAfterDateAdded();
+        }
+      } catch {}
+    })();
+  }, [totalDates]);
 
   const navigateToEditCase = () => {
     navigation.navigate('CreateCase', {

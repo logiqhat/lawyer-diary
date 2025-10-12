@@ -40,10 +40,10 @@ import { useWatermelonSync } from './hooks/useWatermelonSync';
 import { apiClient } from './services/apiClient';
 import { UserSettingsProvider, useUserSettings } from './context/UserSettingsContext';
 import { FeatureFlagsProvider } from './context/FeatureFlagsContext';
-import { registerForFcmTokenAsync } from './services/pushNotificationsFcm';
 import { impactLight } from './utils/haptics';
 import { ensureKey } from './services/vault';
 import { isEncryptionEnabled } from './services/remoteConfig';
+import mobileAds from 'react-native-google-mobile-ads';
 
 // ——— navigation helper ———
 const navigationRef = createNavigationContainerRef();
@@ -139,6 +139,9 @@ function AppInner() {
   const { setTimeZone } = useUserSettings();
 
   useEffect(() => {
+    // Initialize Google Mobile Ads SDK early
+    try { mobileAds().initialize(); } catch (e) { console.warn('[Ads] initialize failed', e?.message || e); }
+
     const unsub = onAuthStateChanged(
       auth,
       (u) => {
@@ -165,12 +168,6 @@ function AppInner() {
     if (!authReady || !currentUser) return;
     (async () => {
       const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-      let fcmToken = null;
-      try {
-        fcmToken = await registerForFcmTokenAsync();
-      } catch (e) {
-        console.warn('FCM token fetch failed', e?.message || e);
-      }
       try {
         // Save timezone locally for formatting
         setTimeZone && setTimeZone(tz)
@@ -180,7 +177,7 @@ function AppInner() {
           body: {
             displayName: currentUser.displayName || '',
             timezone: tz,
-            ...(fcmToken ? { fcmToken } : {}),
+            // fcmToken is added later when user consents to notifications
           },
         })
         .catch((e) => console.warn('Users upsert failed', e?.message || e));

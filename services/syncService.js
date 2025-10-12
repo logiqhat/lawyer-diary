@@ -91,13 +91,10 @@ async function setLastPulledAt(ms) {
 export async function syncNow() {
   if (!usingWatermelon()) return false
   if (!auth?.currentUser) return false
+  const encrypting = await isEncryptionEnabled()
   // Ensure encryption key exists if feature is enabled. Non-fatal on failure.
-  try {
-    if (await isEncryptionEnabled()) {
-      await ensureKey()
-    }
-  } catch (e) {
-    console.warn('Encryption key not available; proceeding without decryption:', e?.message || e)
+  if (encrypting) {
+    try { await ensureKey() } catch (e) { console.warn('Encryption key not available; proceeding without decryption:', e?.message || e) }
   }
 
   // Lazy import to avoid bundling when not used
@@ -131,54 +128,82 @@ export async function syncNow() {
       const since = typeof lastPulledAt === 'number' ? lastPulledAt : (lastSaved || 0)
       const { data } = await apiClient.post('/sync/pull', { body: { last_pulled_at: since } })
       const { changes, timestamp } = data || {}
-      // Decrypt if encrypted fields present; otherwise accept plaintext for compat
-      const decCases = []
-      for (const s of (changes?.cases?.created || [])) {
-        if (s && (s.clientNameEnc || s.oppositePartyNameEnc || s.titleEnc || s.detailsEnc)) {
-          // eslint-disable-next-line no-await-in-loop
-          decCases.push(await decryptCaseServer(s))
-        } else {
-          decCases.push(s)
+      let wmChanges
+      if (encrypting) {
+        // Decrypt if encrypted fields present; otherwise accept plaintext for compat
+        const decCases = []
+        for (const s of (changes?.cases?.created || [])) {
+          if (s && (s.clientNameEnc || s.oppositePartyNameEnc || s.titleEnc || s.detailsEnc)) {
+            // eslint-disable-next-line no-await-in-loop
+            decCases.push(await decryptCaseServer(s))
+          } else {
+            decCases.push(s)
+          }
+        }
+        const updCases = []
+        for (const s of (changes?.cases?.updated || [])) {
+          if (s && (s.clientNameEnc || s.oppositePartyNameEnc || s.titleEnc || s.detailsEnc)) {
+            // eslint-disable-next-line no-await-in-loop
+            updCases.push(await decryptCaseServer(s))
+          } else {
+            updCases.push(s)
+          }
+        }
+        const decDates = []
+        for (const s of (changes?.case_dates?.created || [])) {
+          if (s && s.notesEnc) {
+            // eslint-disable-next-line no-await-in-loop
+            decDates.push(await decryptDateServer(s))
+          } else {
+            decDates.push(s)
+          }
+        }
+        const updDates = []
+        for (const s of (changes?.case_dates?.updated || [])) {
+          if (s && s.notesEnc) {
+            // eslint-disable-next-line no-await-in-loop
+            updDates.push(await decryptDateServer(s))
+          } else {
+            updDates.push(s)
+          }
+        }
+        wmChanges = {
+          cases: {
+            created: decCases.map(toWmCase),
+            updated: updCases.map(toWmCase),
+            deleted: changes?.cases?.deleted || [],
+          },
+          case_dates: {
+            created: decDates.map(toWmDate),
+            updated: updDates.map(toWmDate),
+            deleted: changes?.case_dates?.deleted || [],
+          },
+        }
+      } else {
+        wmChanges = {
+          cases: {
+            created: (changes?.cases?.created || []),
+            updated: (changes?.cases?.updated || []),
+            deleted: changes?.cases?.deleted || [],
+          },
+          case_dates: {
+            created: (changes?.case_dates?.created || []),
+            updated: (changes?.case_dates?.updated || []),
+            deleted: changes?.case_dates?.deleted || [],
+          },
         }
       }
-      const updCases = []
-      for (const s of (changes?.cases?.updated || [])) {
-        if (s && (s.clientNameEnc || s.oppositePartyNameEnc || s.titleEnc || s.detailsEnc)) {
-          // eslint-disable-next-line no-await-in-loop
-          updCases.push(await decryptCaseServer(s))
-        } else {
-          updCases.push(s)
-        }
-      }
-      const decDates = []
-      for (const s of (changes?.case_dates?.created || [])) {
-        if (s && s.notesEnc) {
-          // eslint-disable-next-line no-await-in-loop
-          decDates.push(await decryptDateServer(s))
-        } else {
-          decDates.push(s)
-        }
-      }
-      const updDates = []
-      for (const s of (changes?.case_dates?.updated || [])) {
-        if (s && s.notesEnc) {
-          // eslint-disable-next-line no-await-in-loop
-          updDates.push(await decryptDateServer(s))
-        } else {
-          updDates.push(s)
-        }
-      }
-
-      const wmChanges = {
+      // Map to WM rows
+      wmChanges = {
         cases: {
-          created: decCases.map(toWmCase),
-          updated: updCases.map(toWmCase),
-          deleted: changes?.cases?.deleted || [],
+          created: (wmChanges.cases.created || []).map(toWmCase),
+          updated: (wmChanges.cases.updated || []).map(toWmCase),
+          deleted: wmChanges.cases.deleted || [],
         },
         case_dates: {
-          created: decDates.map(toWmDate),
-          updated: updDates.map(toWmDate),
-          deleted: changes?.case_dates?.deleted || [],
+          created: (wmChanges.case_dates.created || []).map(toWmDate),
+          updated: (wmChanges.case_dates.updated || []).map(toWmDate),
+          deleted: wmChanges.case_dates.deleted || [],
         },
       }
       // Persist timestamp immediately to survive app restarts
@@ -196,7 +221,7 @@ export async function syncNow() {
       }
 
       // Map Watermelon -> server and encrypt sensitive fields (eventDate, photoUri remain plaintext)
-      const encrypting = await isEncryptionEnabled()
+      // use outer encrypting
       if (encrypting) {
         for (const r of (changes?.cases?.created || [])) {
           const plain = toServerCase(r)

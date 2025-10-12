@@ -26,12 +26,10 @@ import ActionSheetModal from '../components/ActionSheetModal';
 import colors from '../theme/colors';
 import * as ImagePicker from 'expo-image-picker';
 import SavingSyncOverlay from '../components/SavingSyncOverlay';
-import NativeAdCard from '../components/NativeAdCard';
 import { impactLight, successNotify } from '../utils/haptics';
 import { logGenericEvent } from '../services/analytics';
 import { syncIfWatermelon } from '../services/syncService';
-import { AD_REPO_ID, registerAdRepository } from '../services/admobNative';
-import { promptNotificationsAfterDateAdded } from '../services/pushNotificationsFcm';
+// Ads removed for now
 
 // helper to format local date as YYYY-MM-DD
 const toLocalYMD = (d) => {
@@ -70,6 +68,8 @@ export default function AddDateScreen() {
   const [showValidation, setShowValidation] = useState(false);
   const [progressVisible, setProgressVisible] = useState(false);
   const [progressStage, setProgressStage] = useState(0); // 0 saving, 1 syncing, 2 done
+  const [awaitingContinue, setAwaitingContinue] = useState(false);
+  const [nextNav, setNextNav] = useState(null);
 
   // Track entry point when opening Add Date (create only)
   useEffect(() => {
@@ -84,23 +84,7 @@ export default function AddDateScreen() {
     }
   }, [dateId, routeSource, initialCaseId, routeEventDate]);
 
-  // Preload native ad on screen entry (no-op if SDK missing)
-  useEffect(() => {
-    registerAdRepository();
-  }, []);
-
-  const [overlayMinMs, setOverlayMinMs] = useState(1200);
-  const OverlayAd = useMemo(
-    () => () => (
-      <NativeAdCard
-        repository={AD_REPO_ID}
-        // When an ad is actually loaded, increase dwell time a bit so it has time to show
-        onAdLoaded={() => setOverlayMinMs((ms) => Math.max(ms, 2500))}
-        onAdFailedToLoad={() => setOverlayMinMs(1200)}
-      />
-    ),
-    []
-  );
+  const overlayMinMs = 1200;
 
   // Derived state
   const selectedCase = cases.find((c) => c.id === selectedCaseId);
@@ -176,15 +160,11 @@ export default function AddDateScreen() {
     setProgressVisible(true);
     (async () => {
       try { syncIfWatermelon(); } catch {}
-      // Ensure overlay shows long enough; extend if ad actually loaded
       await new Promise((res) => setTimeout(res, overlayMinMs));
       setProgressStage(2);
       const toNewCase = !existingDate || (selectedCaseId && selectedCaseId !== existingDate.caseId);
-      setProgressVisible(false);
-      // Politely ask to enable notifications once after saving a date
-      try { await promptNotificationsAfterDateAdded(); } catch {}
-      if (toNewCase) navigation.replace('CaseDetail', { caseId: selectedCaseId });
-      else navigation.goBack();
+      setAwaitingContinue(true);
+      setNextNav(toNewCase ? { type: 'case', caseId: selectedCaseId } : { type: 'back' });
     })();
   }, [date, dispatch, existingDate, navigation, notes, photoUri, selectedCaseId]);
 
@@ -432,7 +412,21 @@ export default function AddDateScreen() {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
-      <SavingSyncOverlay visible={progressVisible} stage={progressStage} AdComponent={OverlayAd} />
+      <SavingSyncOverlay
+        visible={progressVisible}
+        stage={progressStage}
+        showContinue={awaitingContinue}
+        continueLabel="Continue"
+        onContinue={() => {
+          setProgressVisible(false);
+          setAwaitingContinue(false);
+          const target = nextNav;
+          setNextNav(null);
+          if (!target) return;
+          if (target.type === 'case') navigation.replace('CaseDetail', { caseId: target.caseId });
+          else navigation.goBack();
+        }}
+      />
     </SafeAreaView>
   );
 }
