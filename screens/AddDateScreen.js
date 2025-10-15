@@ -24,8 +24,12 @@ import { useUserTimeZone } from '../hooks/useUserTimeZone';
 import ActionSheetModal from '../components/ActionSheetModal';
 import colors from '../theme/colors';
 import * as ImagePicker from 'expo-image-picker';
-import SuccessSplash from '../components/SuccessSplash';
+import SavingSyncOverlay from '../components/SavingSyncOverlay';
+import { syncIfWatermelon } from '../services/syncService';
 import { impactLight, successNotify } from '../utils/haptics';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { apiClient } from '../services/apiClient';
+import { registerForFcmTokenAsync } from '../services/pushNotificationsFcm';
 
 // helper to format local date as YYYY-MM-DD
 const toLocalYMD = (d) => {
@@ -62,8 +66,10 @@ export default function AddDateScreen() {
   const [notes, setNotes] = useState(existingDate?.notes || '');
   const [photoUri, setPhotoUri] = useState(existingDate?.photoUri || null);
   const [showValidation, setShowValidation] = useState(false);
-  const [successVisible, setSuccessVisible] = useState(false);
-  const [successMsg, setSuccessMsg] = useState('');
+  const [overlayVisible, setOverlayVisible] = useState(false);
+  const [overlayStage, setOverlayStage] = useState(0);
+  const [overlayErrorText, setOverlayErrorText] = useState('');
+  const [pendingEnableNotifPrompt, setPendingEnableNotifPrompt] = useState(false);
 
   // Derived state
   const selectedCase = cases.find((c) => c.id === selectedCaseId);
@@ -108,7 +114,7 @@ export default function AddDateScreen() {
           updatedAt: now,
         })
       );
-      setSuccessMsg('Updated');
+      // no-op; handled by overlay
     } else {
       dispatch(
         addDate({
@@ -121,19 +127,63 @@ export default function AddDateScreen() {
           createdAt: now,
         })
       );
-      setSuccessMsg('Saved');
+      // If this becomes the second date overall and notifications are off, queue prompt.
+      (async () => {
+        try {
+          const pref = await AsyncStorage.getItem('settings:notifyEnabled');
+          const enabled = pref === 'true';
+          if (!enabled && (caseDates?.length || 0) === 1) {
+            setPendingEnableNotifPrompt(true);
+          }
+        } catch {}
+      })();
+      // no-op; handled by overlay
     }
-    // Show success splash then navigate
-    setSuccessVisible(true);
+    // Show overlay with staged animations and sync
     try { successNotify(); } catch {}
-    const toNewCase = !existingDate || (selectedCaseId && selectedCaseId !== existingDate.caseId);
-    const go = () => {
-      setSuccessVisible(false);
-      if (toNewCase) navigation.replace('CaseDetail', { caseId: selectedCaseId });
-      else navigation.goBack();
+    setOverlayVisible(true);
+    setOverlayStage(0);
+    // Progress to "saving done" quickly for visual feedback (monotonic)
+    setTimeout(() => setOverlayStage((s) => Math.max(s, 1)), 600);
+
+    // Robust offline check helper (expo-network if available, else navigator.onLine)
+    const checkOffline = async () => {
+      try {
+        // eslint-disable-next-line global-require
+        const Network = require('expo-network');
+        const st = await Network.getNetworkStateAsync();
+        if (st && (st.isInternetReachable === false || st.isConnected === false)) return true;
+      } catch (e) {}
+      try {
+        // eslint-disable-next-line no-undef
+        if (typeof navigator !== 'undefined' && navigator?.onLine === false) return true;
+      } catch (e) {}
+      return false;
     };
-    // Give the splash a short moment to animate before navigating
-    setTimeout(go, 900);
+
+    // Start sync with offline handling and timeout
+    (async () => {
+      if (await checkOffline()) {
+        setOverlayErrorText('Syncing with cloud failed: Not connected to Internet');
+        setOverlayStage(2);
+        return;
+      }
+
+      let done = false;
+      const to = setTimeout(async () => {
+        if (!done) {
+          if (await checkOffline()) {
+            setOverlayErrorText('Syncing with cloud failed: Not connected to Internet');
+          }
+          setOverlayStage(2);
+        }
+      }, 4000);
+
+      try { await syncIfWatermelon(); } catch (e) { console.warn('Sync after save failed:', e?.message || e); }
+      done = true;
+      try { clearTimeout(to); } catch (e) {}
+      setOverlayStage(2);
+    })();
   }, [date, dispatch, existingDate, navigation, notes, photoUri, selectedCaseId]);
 
   const onSubmit = useCallback(() => {
@@ -163,29 +213,33 @@ export default function AddDateScreen() {
 
   // Put Save/Update button in the header (top-right)
   useLayoutEffect(() => {
+    const saveButton = () => (
+      <TouchableOpacity
+        onPress={onSubmit}
+        disabled={!canSave}
+        accessibilityRole="button"
+        style={{
+          marginRight: 16,
+          opacity: canSave ? 1 : 0.5,
+          paddingHorizontal: 10,
+          paddingVertical: 4,
+          backgroundColor: colors.accent,
+          borderRadius: 18,
+        }}
+      >
+        <Text style={{ color: colors.accentOnAccent, fontSize: 16, fontWeight: '700' }}>
+          {existingDate ? 'Update' : 'Save'}
+        </Text>
+      </TouchableOpacity>
+    )
+
     navigation.setOptions({
       title: existingDate ? 'Edit Date' : 'Add Date',
-      headerRight: () => (
-        <TouchableOpacity
-          onPress={onSubmit}
-          disabled={!canSave}
-          accessibilityRole="button"
-          style={{
-            marginRight: 16,
-            opacity: canSave ? 1 : 0.5,
-            paddingHorizontal: 10,
-            paddingVertical: 4,
-            backgroundColor: colors.accent,
-            borderRadius: 18,
-          }}
-        >
-          <Text style={{ color: colors.accentOnAccent, fontSize: 16, fontWeight: '700' }}>
-            {existingDate ? 'Update' : 'Save'}
-          </Text>
-        </TouchableOpacity>
-      ),
-    });
-  }, [navigation, onSubmit, canSave, existingDate]);
+      headerLeft: overlayVisible ? () => null : undefined,
+      headerRight: overlayVisible ? () => null : saveButton,
+      gestureEnabled: !overlayVisible,
+    })
+  }, [navigation, onSubmit, canSave, existingDate, overlayVisible]);
 
   // Request permissions; do not block camera if photo library is denied.
   const requestPermissions = async () => {
@@ -380,12 +434,48 @@ export default function AddDateScreen() {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
-      <SuccessSplash
-        visible={successVisible}
-        message={successMsg}
-        onDone={() => {
-          // Fallback if user dismisses via system back on Android
-          setSuccessVisible(false);
+      <SavingSyncOverlay
+        visible={overlayVisible}
+        stage={overlayStage}
+        errorText={overlayErrorText}
+        onContinue={() => {
+          setOverlayVisible(false);
+          setOverlayErrorText('');
+          // After save complete, optionally prompt to enable notifications (on 2nd date added)
+          if (pendingEnableNotifPrompt) {
+            setPendingEnableNotifPrompt(false);
+            Alert.alert(
+              'Turn on reminders?',
+              'Enable push notifications to get reminders about upcoming dates.',
+              [
+                {
+                  text: 'Not now',
+                  style: 'cancel',
+                  onPress: () => {
+                    navigation.replace('CaseDetail', { caseId: selectedCaseId });
+                  },
+                },
+                {
+                  text: 'Enable',
+                  style: 'default',
+                  onPress: async () => {
+                    try { await AsyncStorage.setItem('settings:notifyEnabled', 'true'); } catch {}
+                    try {
+                      const token = await registerForFcmTokenAsync();
+                      await apiClient.post('/users', {
+                        body: { notifyEnabled: true, ...(token ? { fcmToken: token } : {}) },
+                      });
+                    } catch (e) {
+                      console.warn('Enable notifications failed', e?.message || e);
+                    }
+                    navigation.replace('CaseDetail', { caseId: selectedCaseId });
+                  },
+                },
+              ]
+            );
+          } else {
+            navigation.replace('CaseDetail', { caseId: selectedCaseId });
+          }
         }}
       />
     </SafeAreaView>

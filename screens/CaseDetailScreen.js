@@ -18,6 +18,7 @@ import { removeCase } from '../store/casesSlice';
 import { parseYMDLocal } from '../utils/dateFmt';
 import colors from '../theme/colors';
 import { impactLight, warningNotify } from '../utils/haptics';
+import { NativeCardAd } from '../components/NativeCardAd';
 
 const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 

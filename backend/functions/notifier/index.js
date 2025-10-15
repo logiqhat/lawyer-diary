@@ -51,7 +51,19 @@ exports.handler = async () => {
     totalUsers += 1
     // Load tokens
     const userRes = await doc.get({ TableName: USERS_TABLE, Key: { userId } }).promise()
-    const tokens = getSetValues(userRes?.Item?.fcmTokens).filter(Boolean)
+    const user = userRes?.Item || {}
+
+    // Respect user preference: skip if notifications are disabled
+    if (user.notifyEnabled === false) {
+      try {
+        await doc.delete({ TableName: UPCOMING_TABLE, Key: { notifyTimeMs: t, userId } }).promise()
+      } catch (e) {
+        console.warn('Failed to delete disabled notification row', e)
+      }
+      continue
+    }
+
+    const tokens = getSetValues(user.fcmTokens).filter(Boolean)
     if (!tokens.length) {
       // No tokens — delete the row and continue
       await doc.delete({ TableName: UPCOMING_TABLE, Key: { notifyTimeMs: t, userId } }).promise()

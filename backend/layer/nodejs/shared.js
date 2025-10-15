@@ -1,7 +1,14 @@
 // Shared utilities for LawyerDiary Lambdas
 const AWS = require('aws-sdk');
+const crypto = require('crypto');
 const ddb = new AWS.DynamoDB();
 const doc = new AWS.DynamoDB.DocumentClient();
+const kms = new AWS.KMS();
+const KMS_KEY_ID = process.env.KMS_KEY_ID || '';
+const USERS_TABLE = process.env.USERS_TABLE || '';
+const DEK_CACHE_TTL_MS = Number.parseInt(process.env.DEK_CACHE_TTL_MS || '1800000', 10); // 30m
+const DEK_CACHE_MAX_USES = Number.parseInt(process.env.DEK_CACHE_MAX_USES || '5000', 10);
+const dekCache = new Map(); // userId -> { key: Buffer, expiresAt: number, usesLeft: number }
 
 // ----- HTTP helpers -----
 function corsHeaders() {
@@ -107,6 +114,7 @@ function buildDateUpdate(body) {
 module.exports = {
   ddb,
   doc,
+  kms,
   log,
   getUserId,
   ok,
@@ -120,6 +128,12 @@ module.exports = {
   sanitizeDate,
   buildDateUpdate,
   nowTimestamps,
+  encryptCaseFields,
+  decryptCaseFields,
+  encryptDateFields,
+  decryptDateFields,
+  encryptUpdateValues,
+  ensureUserEncDek,
 };
 
 // ----- Structured logger -----
@@ -158,4 +172,147 @@ function normalizeHeaders(h) {
   const out = {};
   for (const k of Object.keys(h)) out[k.toLowerCase()] = h[k];
   return out;
+}
+
+// ---------------- Field Encryption Helpers (AWS KMS) ----------------
+async function encryptStringIfConfigured(value, context) {
+  if (!KMS_KEY_ID || !USERS_TABLE) return value;
+  if (value === null || value === undefined) return value;
+  const userId = String(context?.userId || '');
+  if (!userId) return value;
+  const dek = await getUserDek(userId);
+  return encryptWithDek(dek, String(value));
+}
+
+async function decryptStringIfConfigured(value, context) {
+  if (!KMS_KEY_ID || !USERS_TABLE) return value;
+  if (value === null || value === undefined) return value;
+  const userId = String(context?.userId || '');
+  if (!userId) return value;
+  const str = String(value);
+  // Accept only envelope v1 format: v1:<ivB64>:<ctB64>:<tagB64>
+  if (!str.startsWith('v1:')) return value;
+  const parts = str.split(':');
+  if (parts.length !== 4) return value;
+  try {
+    const dek = await getUserDek(userId);
+    const iv = Buffer.from(parts[1], 'base64');
+    const ct = Buffer.from(parts[2], 'base64');
+    const tag = Buffer.from(parts[3], 'base64');
+    return decryptWithDek(dek, iv, ct, tag);
+  } catch {
+    return value;
+  }
+}
+
+async function encryptCaseFields(item, userId) {
+  if (!item) return item;
+  const ctx = { userId: String(userId || item.userId || '') };
+  const out = { ...item };
+  out.clientName = await encryptStringIfConfigured(out.clientName, ctx);
+  out.oppositePartyName = await encryptStringIfConfigured(out.oppositePartyName, ctx);
+  out.title = await encryptStringIfConfigured(out.title, ctx);
+  out.details = await encryptStringIfConfigured(out.details, ctx);
+  return out;
+}
+
+async function decryptCaseFields(item, userId) {
+  if (!item) return item;
+  const ctx = { userId: String(userId || item.userId || '') };
+  const out = { ...item };
+  out.clientName = await decryptStringIfConfigured(out.clientName, ctx);
+  out.oppositePartyName = await decryptStringIfConfigured(out.oppositePartyName, ctx);
+  out.title = await decryptStringIfConfigured(out.title, ctx);
+  out.details = await decryptStringIfConfigured(out.details, ctx);
+  return out;
+}
+
+async function encryptDateFields(item, userId) {
+  if (!item) return item;
+  const ctx = { userId: String(userId || item.userId || '') };
+  const out = { ...item };
+  out.notes = await encryptStringIfConfigured(out.notes, ctx);
+  return out;
+}
+
+async function decryptDateFields(item, userId) {
+  if (!item) return item;
+  const ctx = { userId: String(userId || item.userId || '') };
+  const out = { ...item };
+  out.notes = await decryptStringIfConfigured(out.notes, ctx);
+  return out;
+}
+
+async function encryptUpdateValues(updateObj, allowedFields, userId) {
+  if (!updateObj || !updateObj.ExpressionAttributeValues) return updateObj;
+  const ctx = { userId: String(userId || '') };
+  const newVals = { ...updateObj.ExpressionAttributeValues };
+  for (const k of Object.keys(newVals)) {
+    const fieldName = k.startsWith(':') ? k.slice(1) : k;
+    if (allowedFields.includes(fieldName)) {
+      if (newVals[k] !== undefined && newVals[k] !== null) {
+        newVals[k] = await encryptStringIfConfigured(newVals[k], ctx);
+      }
+    }
+  }
+  return { ...updateObj, ExpressionAttributeValues: newVals };
+}
+
+// ---- Envelope encryption internals ----
+async function getUserDek(userId) {
+  const now = Date.now();
+  const cached = dekCache.get(userId);
+  if (cached && cached.expiresAt > now && cached.usesLeft > 0) {
+    cached.usesLeft -= 1;
+    return cached.key;
+  }
+  // Load user's encrypted DEK; generate if absent
+  let encDek = null;
+  try {
+    const res = await doc.get({ TableName: USERS_TABLE, Key: { userId }, ProjectionExpression: 'encDek' }).promise();
+    encDek = res?.Item?.encDek || null;
+  } catch {}
+  if (!encDek) {
+    encDek = await ensureUserEncDek(userId);
+  }
+  // Decrypt DEK
+  const edkBuf = Buffer.from(String(encDek), 'base64');
+  const dec = await kms.decrypt({ CiphertextBlob: edkBuf, EncryptionContext: { userId } }).promise();
+  const key = Buffer.from(dec.Plaintext);
+  // Cache
+  dekCache.set(userId, { key, expiresAt: now + DEK_CACHE_TTL_MS, usesLeft: DEK_CACHE_MAX_USES });
+  return key;
+}
+
+async function ensureUserEncDek(userId) {
+  if (!KMS_KEY_ID || !USERS_TABLE) throw new Error('KMS_KEY_ID/USERS_TABLE not configured');
+  const res = await kms.generateDataKey({ KeyId: KMS_KEY_ID, KeySpec: 'AES_256', EncryptionContext: { userId } }).promise();
+  const enc = Buffer.from(res.CiphertextBlob).toString('base64');
+  // Upsert encDek to users table
+  try {
+    await doc.update({
+      TableName: USERS_TABLE,
+      Key: { userId },
+      UpdateExpression: 'SET #encDek = :edk',
+      ExpressionAttributeNames: { '#encDek': 'encDek' },
+      ExpressionAttributeValues: { ':edk': enc },
+    }).promise();
+  } catch {}
+  return enc;
+}
+
+function encryptWithDek(key, plaintext) {
+  if (!key || !plaintext) return plaintext;
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
+  const ct = Buffer.concat([cipher.update(String(plaintext), 'utf8'), cipher.final()]);
+  const tag = cipher.getAuthTag();
+  return `v1:${iv.toString('base64')}:${ct.toString('base64')}:${tag.toString('base64')}`;
+}
+
+function decryptWithDek(key, iv, ct, tag) {
+  const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
+  decipher.setAuthTag(tag);
+  const pt = Buffer.concat([decipher.update(ct), decipher.final()]);
+  return pt.toString('utf8');
 }

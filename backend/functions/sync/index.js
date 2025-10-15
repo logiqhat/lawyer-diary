@@ -1,4 +1,4 @@
-const { ok, badRequest, notFound, doc, log, getUserId, sanitizeCase, sanitizeDate, buildCaseUpdate, buildDateUpdate, ensureCaseExists } = require('/opt/nodejs/shared');
+const { ok, badRequest, notFound, doc, log, getUserId, sanitizeCase, sanitizeDate, buildCaseUpdate, buildDateUpdate, ensureCaseExists, encryptCaseFields, decryptCaseFields, encryptDateFields, decryptDateFields, encryptUpdateValues } = require('/opt/nodejs/shared');
 
 const CASES_LIMIT = Number.parseInt(process.env.CASES_LIMIT || '0', 10);
 const DATES_PER_CASE_LIMIT = Number.parseInt(process.env.DATES_PER_CASE_LIMIT || '0', 10);
@@ -66,6 +66,24 @@ exports.handler = async (event) => {
 
       const cases = partitionChanges(caseKeys, sinceMs, 'cases');
       const case_dates = partitionChanges(dateKeys, sinceMs, 'case_dates');
+
+      // Decrypt sensitive fields for outbound sync
+      try {
+        if (cases.created && cases.created.length) {
+          cases.created = await Promise.all(cases.created.map((c) => decryptCaseFields(c, userId)));
+        }
+        if (cases.updated && cases.updated.length) {
+          cases.updated = await Promise.all(cases.updated.map((c) => decryptCaseFields(c, userId)));
+        }
+        if (case_dates.created && case_dates.created.length) {
+          case_dates.created = await Promise.all(case_dates.created.map((d) => decryptDateFields(d, userId)));
+        }
+        if (case_dates.updated && case_dates.updated.length) {
+          case_dates.updated = await Promise.all(case_dates.updated.map((d) => decryptDateFields(d, userId)));
+        }
+      } catch (e) {
+        log(event, { level: 'warn', userId, action: 'sync.pull.decrypt_warn', error: String(e) });
+      }
 
       // Users: single record per user
       let users = { created: [], updated: [], deleted: [] };
@@ -183,13 +201,15 @@ exports.handler = async (event) => {
             log(event, { level: 'warn', userId, action: 'sync.cases.created.limit_reached', limit: CASES_LIMIT, id: c.id });
             continue;
           }
-          const item = sanitizeCase({ ...c, userId });
+          let item = sanitizeCase({ ...c, userId });
+          item = await encryptCaseFields(item, userId);
           try {
             await doc.put({ TableName: process.env.CASES_TABLE, Item: item, ConditionExpression: 'attribute_not_exists(userId) AND attribute_not_exists(id)' }).promise();
             if (remainingCases !== Infinity) remainingCases -= 1;
           } catch (e) {
             // If exists, treat as update
-            const up = buildCaseUpdate(c);
+            let up = buildCaseUpdate(c);
+            up = await encryptUpdateValues(up, ['clientName','oppositePartyName','title','details'], userId);
             const incMs = coerceMs(c.updatedAtMs || c.updatedAt);
             try {
               await doc.update({
@@ -225,7 +245,8 @@ exports.handler = async (event) => {
           if (!validateCaseIn(c)) { log(event, { level: 'warn', userId, action: 'sync.cases.updated.invalid', id: c?.id, errors }); continue; }
           try {
             const incMs = coerceMs(c.updatedAtMs || c.updatedAt);
-            const up = buildCaseUpdate(c);
+            let up = buildCaseUpdate(c);
+            up = await encryptUpdateValues(up, ['clientName','oppositePartyName','title','details'], userId);
             await doc.update({
               TableName: process.env.CASES_TABLE,
               Key: { userId, id: c.id },
@@ -290,12 +311,14 @@ exports.handler = async (event) => {
               continue;
             }
           }
-          const item = sanitizeDate({ ...d, userId });
+          let item = sanitizeDate({ ...d, userId });
+          item = await encryptDateFields(item, userId);
           try {
             await doc.put({ TableName: process.env.CASE_DATES_TABLE, Item: item, ConditionExpression: 'attribute_not_exists(userId) AND attribute_not_exists(id)' }).promise();
             if (countsByCase[d.caseId] !== undefined) countsByCase[d.caseId] += 1;
           } catch (e) {
-            const up = buildDateUpdate(d);
+            let up = buildDateUpdate(d);
+            up = await encryptUpdateValues(up, ['notes'], userId);
             const incMs = coerceMs(d.updatedAtMs || d.updatedAt);
             try {
               await doc.update({
@@ -333,7 +356,8 @@ exports.handler = async (event) => {
               if (!exists) { log(event, { level: 'warn', userId, action: 'sync.dates.updated.case_missing', caseId: d.caseId, id: d.id }); continue; }
             }
             const incMs = coerceMs(d.updatedAtMs || d.updatedAt);
-            const up = buildDateUpdate(d);
+            let up = buildDateUpdate(d);
+            up = await encryptUpdateValues(up, ['notes'], userId);
             await doc.update({
               TableName: process.env.CASE_DATES_TABLE,
               Key: { userId, id: d.id },

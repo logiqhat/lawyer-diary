@@ -21,7 +21,7 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "edgeToEdgeEnabled": true,
+      "edgeToEdgeEnabled": false,
       "package": "com.logiqhat.lawyerdiary",
       "googleServicesFile": "./google-services.json"
     },
@@ -40,7 +40,8 @@
       "expo-sqlite",
       "expo-web-browser",
       "expo-file-system",
-      "@react-native-google-signin/google-signin"
+      "@react-native-google-signin/google-signin",
+      "react-native-google-mobile-ads"
     ]
   }
 }

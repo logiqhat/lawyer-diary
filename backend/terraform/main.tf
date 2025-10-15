@@ -187,6 +187,35 @@ resource "aws_iam_role_policy" "lambda_ssm_read" {
   })
 }
 
+# KMS key for field-level encryption
+resource "aws_kms_key" "app_data" {
+  description             = "${var.project} data field encryption"
+  deletion_window_in_days = 7
+  key_usage               = "ENCRYPT_DECRYPT"
+}
+
+resource "aws_kms_alias" "app_data" {
+  name          = "alias/${var.project}-data"
+  target_key_id = aws_kms_key.app_data.key_id
+}
+
+# Allow Lambdas to use the KMS key
+resource "aws_iam_role_policy" "lambda_kms" {
+  name = "${var.project}-lambda-kms"
+  role = aws_iam_role.lambda_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Effect   = "Allow",
+        Action   = ["kms:Encrypt", "kms:Decrypt", "kms:GenerateDataKey"],
+        Resource = aws_kms_key.app_data.arn
+      }
+    ]
+  })
+}
+
 # Ensure dist folder exists for archives
 resource "null_resource" "ensure_dist" {
   provisioner "local-exec" {
@@ -315,9 +344,11 @@ resource "aws_lambda_function" "cases" {
     variables = {
       CASES_TABLE          = aws_dynamodb_table.cases.name
       CASE_DATES_TABLE     = aws_dynamodb_table.case_dates.name
+      USERS_TABLE          = aws_dynamodb_table.users.name
       DEFAULT_TEST_USER_ID = var.default_test_user_id
       STAGE                = var.stage
       CASES_LIMIT          = "100"
+      KMS_KEY_ID           = aws_kms_key.app_data.arn
     }
   }
 }
@@ -336,9 +367,11 @@ resource "aws_lambda_function" "dates" {
     variables = {
       CASES_TABLE          = aws_dynamodb_table.cases.name
       CASE_DATES_TABLE     = aws_dynamodb_table.case_dates.name
+      USERS_TABLE          = aws_dynamodb_table.users.name
       DEFAULT_TEST_USER_ID = var.default_test_user_id
       STAGE                = var.stage
       DATES_PER_CASE_LIMIT = "100"
+      KMS_KEY_ID           = aws_kms_key.app_data.arn
     }
   }
 }
@@ -383,6 +416,7 @@ resource "aws_lambda_function" "sync" {
       STAGE                = var.stage
       CASES_LIMIT          = "100"
       DATES_PER_CASE_LIMIT = "100"
+      KMS_KEY_ID           = aws_kms_key.app_data.arn
     }
   }
 }

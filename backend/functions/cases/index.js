@@ -1,4 +1,4 @@
-const { ok, notFound, badRequest, doc, sanitizeCase, buildCaseUpdate, log, getUserId } = require('/opt/nodejs/shared');
+const { ok, notFound, badRequest, doc, sanitizeCase, buildCaseUpdate, log, getUserId, encryptCaseFields, decryptCaseFields, encryptUpdateValues } = require('/opt/nodejs/shared');
 
 const CASES_LIMIT = Number.parseInt(process.env.CASES_LIMIT || '100', 10);
 
@@ -31,14 +31,16 @@ exports.handler = async (event) => {
         }
       }
 
-      const item = sanitizeCase({ ...body, userId });
+      let item = sanitizeCase({ ...body, userId });
+      item = await encryptCaseFields(item, userId);
       await doc.put({ TableName: process.env.CASES_TABLE, Item: item, ConditionExpression: 'attribute_not_exists(userId) AND attribute_not_exists(id)' }).promise();
       log(event, { level: 'info', userId, action: 'cases.create.ok', id: item.id });
       return ok(item);
     }
     if (method === 'GET' && path === '/cases') {
       const res = await doc.query({ TableName: process.env.CASES_TABLE, KeyConditionExpression: 'userId = :u', ExpressionAttributeValues: { ':u': userId } }).promise();
-      const items = (res.Items || []).filter((i) => !i.deleted);
+      const raw = (res.Items || []).filter((i) => !i.deleted);
+      const items = await Promise.all(raw.map((i) => decryptCaseFields(i, userId)));
       log(event, { level: 'info', userId, action: 'cases.list', count: items.length });
       return ok(items);
     }
@@ -46,16 +48,19 @@ exports.handler = async (event) => {
       const id = params.id || path.split('/')[2];
       const res = await doc.get({ TableName: process.env.CASES_TABLE, Key: { userId, id } }).promise();
       if (!res.Item || res.Item.deleted) { log(event, { level: 'info', userId, action: 'cases.get.miss', id }); return notFound({ message: 'case not found' }); }
+      const dec = await decryptCaseFields(res.Item, userId);
       log(event, { level: 'info', userId, action: 'cases.get.hit', id });
-      return ok(res.Item);
+      return ok(dec);
     }
     if (method === 'PUT' && path.startsWith('/cases/')) {
       const id = params.id || path.split('/')[2];
       log(event, { level: 'info', userId, action: 'cases.update.start', id });
-      const up = buildCaseUpdate(body);
+      let up = buildCaseUpdate(body);
+      up = await encryptUpdateValues(up, ['clientName', 'oppositePartyName', 'title', 'details'], userId);
       const res = await doc.update({ TableName: process.env.CASES_TABLE, Key: { userId, id }, ...up, ConditionExpression: 'attribute_exists(userId) AND attribute_exists(id)', ReturnValues: 'ALL_NEW' }).promise();
+      const dec = await decryptCaseFields(res.Attributes, userId);
       log(event, { level: 'info', userId, action: 'cases.update.ok', id });
-      return ok(res.Attributes);
+      return ok(dec);
     }
     if (method === 'DELETE' && path.startsWith('/cases/')) {
       const id = params.id || path.split('/')[2];

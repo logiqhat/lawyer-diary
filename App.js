@@ -39,7 +39,9 @@ import { useWatermelonSync } from './hooks/useWatermelonSync';
 import { apiClient } from './services/apiClient';
 import { UserSettingsProvider, useUserSettings } from './context/UserSettingsContext';
 import { FeatureFlagsProvider } from './context/FeatureFlagsContext';
-import { registerForFcmTokenAsync } from './services/pushNotificationsFcm';
+// Deliberately do not request notification permission on startup
+// import { registerForFcmTokenAsync } from './services/pushNotificationsFcm';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { impactLight } from './utils/haptics';
 
 // ——— navigation helper ———
@@ -162,11 +164,17 @@ function AppInner() {
     if (!authReady || !currentUser) return;
     (async () => {
       const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      // Only register for notifications if user has opted in
       let fcmToken = null;
       try {
-        fcmToken = await registerForFcmTokenAsync();
+        const pref = await AsyncStorage.getItem('settings:notifyEnabled');
+        const enabled = pref === 'true';
+        if (enabled) {
+          const { registerForFcmTokenAsync } = await import('./services/pushNotificationsFcm');
+          fcmToken = await registerForFcmTokenAsync();
+        }
       } catch (e) {
-        console.warn('FCM token fetch failed', e?.message || e);
+        console.warn('FCM token fetch skipped/failed', e?.message || e);
       }
       try {
         // Save timezone locally for formatting

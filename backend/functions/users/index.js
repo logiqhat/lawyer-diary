@@ -1,4 +1,4 @@
-const { ok, parseBool, doc, log, getUserId } = require('/opt/nodejs/shared');
+const { ok, parseBool, doc, log, getUserId, ensureUserEncDek } = require('/opt/nodejs/shared');
 
 exports.handler = async (event) => {
   try {
@@ -53,6 +53,15 @@ exports.handler = async (event) => {
     }
 
     log(event, { level: 'info', userId, action: 'users.upsert.start' });
+    // Ensure per-user DEK exists (provision on login)
+    try {
+      const existing = await doc.get({ TableName: process.env.USERS_TABLE, Key: { userId }, ProjectionExpression: 'encDek' }).promise();
+      if (!existing || !existing.Item || !existing.Item.encDek) {
+        await ensureUserEncDek(userId);
+      }
+    } catch (e) {
+      console.warn('ensureUserEncDek failed', e?.message || e);
+    }
     const res = await doc.update(updates).promise();
     log(event, { level: 'info', userId, action: 'users.upsert.ok' });
     return ok(res.Attributes || { userId });

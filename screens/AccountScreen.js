@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View, Switch } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSelector } from 'react-redux';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
@@ -9,6 +9,8 @@ import Screen from '../components/Screen';
 import colors from '../theme/colors';
 import { useUserTimeZone } from '../hooks/useUserTimeZone';
 import { useFeatureFlags } from '../context/FeatureFlagsContext';
+import { apiClient } from '../services/apiClient';
+import { registerForFcmTokenAsync } from '../services/pushNotificationsFcm';
 
 function formatDateWithTz(dateLike, tz) {
   if (!dateLike) return '—';
@@ -36,6 +38,10 @@ export default function AccountScreen() {
   const caseItems = useSelector((s) => s.cases?.items || []);
   const dateItems = useSelector((s) => s.caseDates?.items || []);
   const [lastSync, setLastSync] = useState(null);
+  const [notifyEnabled, setNotifyEnabled] = useState(false);
+  const [savingNotify, setSavingNotify] = useState(false);
+
+  const NOTIFY_ENABLED_KEY = 'settings:notifyEnabled';
 
   useEffect(() => {
     const unsub = onAuthStateChanged(
@@ -57,6 +63,47 @@ export default function AccountScreen() {
       }
     })();
   }, []);
+
+  // Load saved notification preference
+  useEffect(() => {
+    (async () => {
+      try {
+        const saved = await AsyncStorage.getItem(NOTIFY_ENABLED_KEY);
+        if (saved != null) setNotifyEnabled(saved === 'true');
+      } catch {}
+    })();
+  }, []);
+
+  const updateNotifyPref = async (nextEnabled) => {
+    if (savingNotify) return;
+    setSavingNotify(true);
+    try {
+      // Persist locally first for snappy UI
+      setNotifyEnabled(nextEnabled);
+      try { await AsyncStorage.setItem(NOTIFY_ENABLED_KEY, String(nextEnabled)); } catch {}
+
+      // If enabling, make sure we have permission and a token
+      let fcmToken = null;
+      if (nextEnabled) {
+        try {
+          fcmToken = await registerForFcmTokenAsync();
+        } catch (e) {
+          console.warn('Notification permission/token error', e?.message || e);
+        }
+      }
+
+      // Upsert preference on backend (token optional)
+      try {
+        await apiClient.post('/users', {
+          body: { notifyEnabled: !!nextEnabled, ...(fcmToken ? { fcmToken } : {}) },
+        });
+      } catch (e) {
+        console.warn('Failed to update notification preference', e?.message || e);
+      }
+    } finally {
+      setSavingNotify(false);
+    }
+  };
 
   const initials = useMemo(() => {
     const source = user?.displayName || user?.email || '';
@@ -126,6 +173,14 @@ export default function AccountScreen() {
           <View style={styles.row}>
             <Text style={styles.rowLabel}>Created</Text>
             <Text style={styles.rowValue}>{formatDateWithTz(createdAt, timeZone)}</Text>
+          </View>
+          <View style={styles.row}>
+            <Text style={styles.rowLabel}>Push notifications</Text>
+            <Switch
+              value={notifyEnabled}
+              onValueChange={updateNotifyPref}
+              disabled={savingNotify}
+            />
           </View>
           <View style={styles.row}>
             <Text style={styles.rowLabel}>Last sign-in</Text>
