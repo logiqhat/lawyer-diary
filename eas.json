@@ -6,13 +6,36 @@
   "build": {
     "development": {
       "developmentClient": true,
-      "distribution": "internal"
+      "distribution": "internal",
+      "env": {
+        "APP_ENV": "development",
+        "GOOGLE_SERVICES_FILE": "./google-services.json",
+        "ADMOB_ANDROID_APP_ID": "ca-app-pub-3940256099942544~3347511713",
+        "ADMOB_IOS_APP_ID": "ca-app-pub-3940256099942544~1458002511",
+        "ADMOB_NATIVE_AD_UNIT_ID": "ca-app-pub-3940256099942544/2247696110",
+        "API_BASE_URL": "https://736n3vmsa4.execute-api.us-east-1.amazonaws.com"
+      }
     },
     "preview": {
-      "distribution": "internal"
+      "distribution": "internal",
+      "env": {
+        "APP_ENV": "preview",
+        "GOOGLE_SERVICES_FILE": "./google-services.json",
+        "ADMOB_ANDROID_APP_ID": "ca-app-pub-5200125610280259~5768900919",
+        "ADMOB_IOS_APP_ID": "ca-app-pub-3940256099942544~1458002511",
+        "ADMOB_NATIVE_AD_UNIT_ID": "ca-app-pub-5200125610280259/1143367994",
+        "API_BASE_URL": "https://736n3vmsa4.execute-api.us-east-1.amazonaws.com"
+      }
     },
     "production": {
-      "autoIncrement": true
+      "autoIncrement": true,
+      "env": {
+        "APP_ENV": "production",
+        "GOOGLE_SERVICES_FILE": "./google-services.json",
+        "ADMOB_ANDROID_APP_ID": "ca-app-pub-5200125610280259~5768900919",
+        "ADMOB_NATIVE_AD_UNIT_ID": "ca-app-pub-5200125610280259/1143367994",
+        "API_BASE_URL": "https://736n3vmsa4.execute-api.us-east-1.amazonaws.com"
+      }
     }
   },
   "submit": {

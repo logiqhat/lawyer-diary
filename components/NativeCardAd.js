@@ -10,13 +10,16 @@ import {
   NativeAdEventType,
   TestIds,
 } from "react-native-google-mobile-ads";
+import Constants from "expo-constants";
 
 export function NativeCardAd({ onLoaded, onLoadError }) {
   const [nativeAd, setNativeAd] = useState(null);
 
   useEffect(() => {
     let mounted = true;
-    NativeAd.createForAdRequest(TestIds.NATIVE)
+    const extra = (Constants.expoConfig?.extra ?? Constants.manifest?.extra) || {};
+    const unitId = (extra?.admob?.adUnits?.native && String(extra.admob.adUnits.native).trim()) || TestIds.NATIVE;
+    NativeAd.createForAdRequest(unitId)
       .then((ad) => {
         if (!mounted) return;
         setNativeAd(ad);

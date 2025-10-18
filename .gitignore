@@ -39,6 +39,7 @@ yarn-error.*
 # Terraform & IDE
 .terraform/
 .vscode/
+.idea/
 # Backend Terraform (moved under backend/terraform)
 backend/terraform/.terraform/
 backend/terraform/.terraform.lock.hcl
