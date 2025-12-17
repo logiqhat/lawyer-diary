@@ -1,5 +1,5 @@
 // App.js
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { TouchableOpacity, View, Text, StyleSheet } from 'react-native';
 import { Provider, useDispatch, useSelector } from 'react-redux';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -43,6 +43,11 @@ import { FeatureFlagsProvider } from './context/FeatureFlagsContext';
 // import { registerForFcmTokenAsync } from './services/pushNotificationsFcm';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { impactLight } from './utils/haptics';
+import * as SplashScreen from 'expo-splash-screen';
+import AnimatedSplash from './components/AnimatedSplash';
+
+// Keep native splash on while JS loads, then swap to animated splash UI
+try { SplashScreen.preventAutoHideAsync(); } catch {}
 
 // ——— navigation helper ———
 const navigationRef = createNavigationContainerRef();
@@ -68,37 +73,27 @@ function AppInitializer({ children }) {
         // Initialize database
         await initDatabase();
         console.log('Database initialized successfully');
-        
-        // Load data from database
-        console.log('Loading cases and dates...');
-        const [casesResult, datesResult] = await Promise.allSettled([
-          dispatch(fetchCases()),
-          dispatch(fetchDates())
-        ]);
-        console.log('Data loaded successfully');
-        
-        // Check if both fetches were successful and returned empty results
-        const casesSuccess = casesResult.status === 'fulfilled';
-        const datesSuccess = datesResult.status === 'fulfilled';
-        
-        if (casesSuccess && datesSuccess) {
-          const state = store.getState();
-          if (state.cases.items.length === 0 && state.caseDates.items.length === 0) {
-            console.log('No data found, populating with test data...');
-          
-            // await clearAllData();
 
-            // // Reload data after migration
-            // await Promise.allSettled([
-            //   dispatch(fetchCases()),
-            //   dispatch(fetchDates())
-            // ]);
-            // console.log('Test data loaded successfully');
-          }
-        } else {
-          console.log('Some data fetches failed, but continuing...');
+        // Kick off data loads in background; don't block UI
+        try {
+          console.log('Loading cases and dates (background)...');
+          dispatch(fetchCases());
+          dispatch(fetchDates());
+        } catch (e) {
+          console.log('Background data load failed to start:', e?.message || e);
         }
-        
+
+        // Optionally log if no data after first tick (non-blocking)
+        setTimeout(() => {
+          try {
+            const state = store.getState();
+            if ((state.cases.items?.length || 0) === 0 && (state.caseDates.items?.length || 0) === 0) {
+              console.log('No data found yet (will populate over time if needed)');
+            }
+          } catch {}
+        }, 0);
+
+        // Unblock UI immediately after DB is ready
         setIsInitialized(true);
       } catch (error) {
         console.error('Failed to initialize app:', error);
@@ -111,11 +106,7 @@ function AppInitializer({ children }) {
   }, [dispatch]);
 
   if (!isInitialized) {
-    return (
-      <View style={styles.center}>
-        <Text>Loading...</Text>
-      </View>
-    );
+    return <AnimatedSplash message="Loading data..." />;
   }
 
   if (error) {
@@ -283,11 +274,7 @@ function AppInner() {
   }
 
   if (!authReady) {
-    return (
-      <View style={styles.center}>
-        <Text>Loading...</Text>
-      </View>
-    );
+    return <AnimatedSplash message="Signing in..." />;
   }
 
   return (
@@ -409,13 +396,29 @@ function AppInner() {
 }
 
 export default function App() {
+  const onLayoutRootView = useCallback(async () => {
+    try { await SplashScreen.hideAsync(); } catch {}
+  }, []);
+
+  // Fallback: hide native splash ASAP after first JS tick
+  useEffect(() => {
+    let raf = requestAnimationFrame(() => {
+      SplashScreen.hideAsync().catch(() => {});
+    });
+    return () => {
+      try { cancelAnimationFrame(raf); } catch {}
+    };
+  }, []);
+
   return (
     <Provider store={store}>
-      <UserSettingsProvider>
-        <FeatureFlagsProvider>
-          <AppInner />
-        </FeatureFlagsProvider>
-      </UserSettingsProvider>
+      <View style={{ flex: 1 }} onLayout={onLayoutRootView}>
+        <UserSettingsProvider>
+          <FeatureFlagsProvider>
+            <AppInner />
+          </FeatureFlagsProvider>
+        </UserSettingsProvider>
+      </View>
     </Provider>
   );
 }

@@ -72,9 +72,12 @@ export default () => {
         edgeToEdgeEnabled: true,
         package: 'com.logiqhat.lawyerdiary',
         googleServicesFile: resolveGoogleServicesFile(),
-        permissions: ['com.google.android.gms.permission.AD_ID'],
+        versionCode: 1,
+        permissions: [
+          'com.google.android.gms.permission.AD_ID'
+        ],
         adaptiveIcon: {
-          foregroundImage: './assets/adaptive-icon.png',
+          foregroundImage: './assets/adaptive-foreground.png',
           backgroundColor: '#ffffff',
         },
       },
@@ -86,6 +89,10 @@ export default () => {
         apiBaseUrl: resolveApiBaseUrl(),
         firebase: isProd ? prodFirebase : devFirebase,
         admob: { adUnits: resolveAdUnits() },
+        // Used by Google Sign-In to mint an ID token for Firebase Auth
+        googleWebClientId:
+          process.env.GOOGLE_WEB_CLIENT_ID ||
+          '306995543731-4dmtrus9bm8bkan739ed514q8d94r0cv.apps.googleusercontent.com',
         eas: {
          projectId: "0c0c590f-1aa2-4cb4-a2b8-c026e62864d7"
        }
