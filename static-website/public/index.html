@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>LawyerDiary – Case & Hearing Tracker</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #f9fafb;
+      --surface: #ffffff;
+      --surface-soft: #f3f4f6;
+      --primary: #292929;
+      --accent: #e3d8ba;
+      --text: #1f2937;
+      --muted: #6b7280;
+      --border: #e5e7eb;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: 'Manrope', 'Segoe UI', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      position: relative;
+      overflow-x: hidden;
+    }
+    .bg-glow {
+      position: fixed;
+      inset: -20% -20% auto auto;
+      width: 60vw;
+      height: 60vw;
+      background: radial-gradient(circle, #ece7da 0%, rgba(227,216,186,0.05) 55%, transparent 70%);
+      filter: blur(12px);
+      z-index: 0;
+      pointer-events: none;
+    }
+    .bg-glow-2 {
+      position: fixed;
+      inset: auto auto -25% -10%;
+      width: 70vw;
+      height: 70vw;
+      background: radial-gradient(circle, rgba(41,41,41,0.08) 0%, transparent 65%);
+      filter: blur(22px);
+      z-index: 0;
+      pointer-events: none;
+    }
+    header, main {
+      position: relative;
+      z-index: 1;
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 0 20px;
+    }
+    header {
+      padding: 28px 20px 8px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-weight: 700;
+      font-size: 18px;
+      letter-spacing: 0.02em;
+      color: var(--primary);
+    }
+    .badge {
+      padding: 7px 12px;
+      background: var(--primary);
+      color: var(--accent);
+      border-radius: 999px;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+    .link {
+      color: var(--primary);
+      text-decoration: none;
+      font-weight: 600;
+      border-bottom: 1px solid transparent;
+    }
+    .link:hover { border-color: var(--primary); }
+    .hero {
+      margin-top: 8px;
+      padding: 36px 30px;
+      background: linear-gradient(135deg, #ffffff, #f4f4f4 50%, #ece7da);
+      border: 1px solid var(--border);
+      border-radius: 22px;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 28px;
+      box-shadow: 0 22px 40px rgba(0,0,0,0.08);
+    }
+    .tagline {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      background: var(--surface-soft);
+      border-radius: 999px;
+      font-weight: 700;
+      color: var(--primary);
+      border: 1px solid var(--border);
+      margin-bottom: 12px;
+    }
+    .tagline span {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+      background: var(--primary);
+    }
+    h1 {
+      font-size: clamp(32px, 4vw, 44px);
+      margin: 0 0 14px;
+      color: var(--primary);
+      letter-spacing: -0.01em;
+      line-height: 1.1;
+    }
+    .lead {
+      margin: 0 0 18px;
+      color: var(--muted);
+      font-size: 16px;
+      line-height: 1.65;
+    }
+    .points {
+      display: grid;
+      gap: 10px;
+      margin: 14px 0 22px;
+      padding: 0;
+      list-style: none;
+    }
+    .points li {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      font-weight: 600;
+      color: var(--primary);
+    }
+    .points li span {
+      display: inline-flex;
+      width: 22px;
+      height: 22px;
+      border-radius: 8px;
+      background: var(--primary);
+      color: var(--accent);
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      box-shadow: 0 6px 14px rgba(0,0,0,0.08);
+    }
+    .cta-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: center;
+      margin-top: 10px;
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 16px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      text-decoration: none;
+      color: var(--primary);
+      background: var(--surface);
+      box-shadow: 0 10px 24px rgba(0,0,0,0.04);
+      transition: transform 120ms ease, box-shadow 120ms ease, background 120ms ease;
+      font-weight: 700;
+    }
+    .btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 16px 30px rgba(0,0,0,0.08);
+    }
+    .btn-primary {
+      background: var(--primary);
+      color: var(--accent);
+      border-color: #1f1f1f;
+    }
+    .badge-row {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-top: 16px;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 600;
+    }
+    .pill {
+      padding: 8px 12px;
+      background: var(--surface-soft);
+      border-radius: 10px;
+      border: 1px solid var(--border);
+    }
+    .phone {
+      position: relative;
+      width: 100%;
+      max-width: 420px;
+      margin: 0 auto;
+      background: linear-gradient(180deg, #1f1f1f, #2f2f2f);
+      border-radius: 28px;
+      padding: 16px;
+      box-shadow: 0 30px 50px rgba(0,0,0,0.18);
+      color: #f5f5f5;
+      overflow: hidden;
+    }
+    .phone::after {
+      content: "";
+      position: absolute;
+      inset: 10px 10px auto auto;
+      width: 90px;
+      height: 90px;
+      background: radial-gradient(circle, rgba(227,216,186,0.3), transparent 65%);
+      filter: blur(6px);
+      pointer-events: none;
+    }
+    .phone-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 4px 12px;
+      font-size: 13px;
+      letter-spacing: 0.04em;
+      color: #dcd2b0;
+    }
+    .phone-body {
+      background: #202020;
+      border-radius: 18px;
+      padding: 14px;
+      border: 1px solid rgba(255,255,255,0.05);
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,0.02);
+    }
+    .phone-title {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+      font-weight: 700;
+      color: #f7f7f7;
+    }
+    .list {
+      display: grid;
+      gap: 10px;
+    }
+    .item {
+      background: #252525;
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 14px;
+      padding: 12px;
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      box-shadow: 0 12px 22px rgba(0,0,0,0.14);
+    }
+    .item-date {
+      width: 58px;
+      padding: 8px 6px;
+      background: var(--accent);
+      color: #181818;
+      border-radius: 12px;
+      text-align: center;
+      font-weight: 800;
+      line-height: 1.2;
+    }
+    .item-text {
+      flex: 1;
+    }
+    .item-text strong {
+      display: block;
+      color: #f7f7f7;
+      margin-bottom: 4px;
+      letter-spacing: 0.01em;
+    }
+    .item-text span {
+      color: #c7c7c7;
+      font-size: 13px;
+    }
+    .section {
+      margin-top: 40px;
+    }
+    .section h2 {
+      margin: 0 0 12px;
+      font-size: 24px;
+      color: var(--primary);
+    }
+    .section p {
+      margin: 0 0 18px;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+    .grid {
+      display: grid;
+      gap: 18px;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 18px;
+      box-shadow: 0 12px 22px rgba(0,0,0,0.04);
+      display: grid;
+      gap: 8px;
+    }
+    .card h3 {
+      margin: 0;
+      font-size: 17px;
+      color: var(--primary);
+    }
+    .card p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.55;
+      font-size: 14px;
+    }
+    .stepper {
+      display: grid;
+      gap: 12px;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      margin-top: 12px;
+    }
+    .step {
+      padding: 14px;
+      background: var(--surface);
+      border: 1px dashed var(--border);
+      border-radius: 12px;
+      display: grid;
+      gap: 6px;
+    }
+    .step-num {
+      font-weight: 800;
+      color: var(--primary);
+    }
+    .cta-banner {
+      margin: 46px 0 20px;
+      padding: 22px 20px;
+      background: linear-gradient(135deg, #292929, #1f1f1f);
+      border-radius: 18px;
+      color: #f4f0e3;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 12px;
+      align-items: center;
+      box-shadow: 0 18px 32px rgba(0,0,0,0.14);
+    }
+    .cta-banner h3 {
+      margin: 0;
+      font-size: 22px;
+      letter-spacing: -0.01em;
+    }
+    .cta-banner p {
+      margin: 4px 0 0;
+      color: #d9cfb3;
+    }
+    .cta-banner .cta-row .btn {
+      background: #f4f0e3;
+      color: #1f1f1f;
+      border-color: #f4f0e3;
+      box-shadow: none;
+    }
+    footer {
+      padding: 18px 20px 28px;
+      color: var(--muted);
+      font-size: 14px;
+      text-align: left;
+    }
+    @media (max-width: 640px) {
+      header { flex-direction: column; align-items: flex-start; }
+      .hero { padding: 28px 22px; }
+      .cta-row { flex-direction: column; align-items: flex-start; }
+      .btn { width: 100%; justify-content: center; }
+      .phone { max-width: 100%; }
+    }
+  </style>
+</head>
+<body>
+  <div class="bg-glow"></div>
+  <div class="bg-glow-2"></div>
+
+  <header>
+    <div class="brand">
+      <span class="badge">LawyerDiary</span>
+      <span>Case & Hearing Tracker</span>
+    </div>
+    <a class="link" href="/privacy-policy.html">Privacy policy</a>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div>
+        <div class="tagline"><span></span> Built for busy legal professionals</div>
+        <h1>Keep every matter organized, synced, and on time.</h1>
+        <p class="lead">LawyerDiary lets you capture case details, attach hearing dates with notes or photos, and get reminders that keep you ahead. Offline-first on device, with secure sync when you sign in.</p>
+        <ul class="points">
+          <li><span>1</span> Email or Google login with Firebase Auth</li>
+          <li><span>2</span> Offline-friendly; syncs when online</li>
+          <li><span>3</span> Optional push reminders for upcoming dates</li>
+          <li><span>4</span> Sensitive fields encrypted when synced</li>
+        </ul>
+        <div class="cta-row">
+          <a class="btn btn-primary" href="https://play.google.com/store/apps/details?id=com.logiqhat.lawyerdiary" target="_blank" rel="noopener">Get it on Google Play</a>
+          <a class="btn" href="#" aria-disabled="true">App Store (coming soon)</a>
+        </div>
+        <div class="badge-row">
+          <div class="pill">Secure cloud sync available</div>
+          <div class="pill">Data stays on device until you sign in</div>
+        </div>
+      </div>
+      <div class="phone">
+        <div class="phone-top">
+          <span>Thu, 9:41 AM</span>
+          <span>LawyerDiary</span>
+        </div>
+        <div class="phone-body">
+          <div class="phone-title">
+            <span>Upcoming hearings</span>
+            <span style="color:#d9cfb3;font-size:12px;">Synced</span>
+          </div>
+          <div class="list">
+            <div class="item">
+              <div class="item-date">
+                JAN<br>12
+              </div>
+              <div class="item-text">
+                <strong>State vs. Coleman</strong>
+                <span>High Court • 10:00 AM • Notes added</span>
+              </div>
+            </div>
+            <div class="item">
+              <div class="item-date">
+                JAN<br>18
+              </div>
+              <div class="item-text">
+                <strong>Patel v. Horizon</strong>
+                <span>Affidavit filing • Reminder set</span>
+              </div>
+            </div>
+            <div class="item">
+              <div class="item-date">
+                JAN<br>24
+              </div>
+              <div class="item-text">
+                <strong>Estate Planning</strong>
+                <span>Client review • Bring signed drafts</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2>Why lawyers choose LawyerDiary</h2>
+      <p>Deliberately simple, fast, and private. Keep your practice moving without juggling spreadsheets or generic calendars.</p>
+      <div class="grid">
+        <div class="card">
+          <h3>Structured case files</h3>
+          <p>Capture client and opposing party names, titles, and details in one place. Everything stays together with your hearing dates.</p>
+        </div>
+        <div class="card">
+          <h3>Notes & photos</h3>
+          <p>Attach quick notes or snap photos of orders, receipts, or filings so context is never lost.</p>
+        </div>
+        <div class="card">
+          <h3>Reminders that work</h3>
+          <p>Turn on push reminders to get nudges before hearings. You decide when to enable notifications.</p>
+        </div>
+        <div class="card">
+          <h3>Offline-first, cloud-ready</h3>
+          <p>Everything works without signal. Sign in to sync securely across devices when you’re online.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2>How it fits your day</h2>
+      <div class="stepper">
+        <div class="step">
+          <div class="step-num">1. Add a case</div>
+          <div>Client, opposing party, title, and any quick details.</div>
+        </div>
+        <div class="step">
+          <div class="step-num">2. Add dates</div>
+          <div>Hearings, deadlines, and notes or photos for context.</div>
+        </div>
+        <div class="step">
+          <div class="step-num">3. Get reminders</div>
+          <div>Enable push notifications when you’re ready.</div>
+        </div>
+        <div class="step">
+          <div class="step-num">4. Sync securely</div>
+          <div>Sign in to sync; sensitive fields are encrypted in the cloud.</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="cta-banner">
+      <div>
+        <h3>Ready to keep your matters under control?</h3>
+        <p>Download LawyerDiary and stay ahead of every hearing and deadline.</p>
+      </div>
+      <div class="cta-row">
+        <a class="btn" style="background:#f4f0e3;color:#1f1f1f;border-color:#f4f0e3;" href="https://play.google.com/store/apps/details?id=com.logiqhat.lawyerdiary" target="_blank" rel="noopener">Get it on Google Play</a>
+        <a class="btn" href="#" aria-disabled="true" style="opacity:0.7;">App Store (coming soon)</a>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    Need the privacy policy? <a class="link" href="/privacy-policy.html">View it here</a>.
+  </footer>
+</body>
+</html>

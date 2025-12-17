@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>LawyerDiary Privacy Policy</title>
+  <style>
+    body { font-family: Arial, sans-serif; color: #111; background: #f7f7f7; margin: 0; padding: 0; }
+    .page { max-width: 900px; margin: 0 auto; background: #fff; padding: 32px 24px 48px; box-shadow: 0 10px 30px rgba(0,0,0,0.06); }
+    h1, h2, h3 { color: #0f172a; }
+    h1 { margin-top: 0; }
+    h2 { margin-top: 28px; }
+    p, li { line-height: 1.6; }
+    ul { margin-top: 8px; }
+    .tag { display: inline-block; padding: 4px 10px; background: #eef2ff; color: #312e81; border-radius: 999px; font-size: 12px; font-weight: 700; letter-spacing: 0.02em; text-transform: uppercase; }
+    .muted { color: #4b5563; }
+    a { color: #2563eb; }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="tag">LawyerDiary</div>
+    <h1>Privacy Policy</h1>
+    <p class="muted">Last updated: 2025-12-15</p>
+
+    <p>LawyerDiary is a personal scheduling and notes app for legal professionals. It lets you add cases, track hearing/deadline dates, and (optionally) sync them to your account. This policy explains what we collect, how we use it, and the choices you have. If anything here changes, we will update this page.</p>
+
+    <h2>Information We Collect</h2>
+    <h3>Account and login</h3>
+    <ul>
+      <li>Email address and display name (from Firebase Authentication). Passwords are handled by Firebase and are not visible to us.</li>
+      <li>Google Sign-In tokens when you choose Google login (used only to sign you into Firebase).</li>
+      <li>Firebase user ID (UID) to associate your data with your account.</li>
+    </ul>
+
+    <h3>App content you add</h3>
+    <ul>
+      <li>Cases: client name, opposite party name, case title, and optional details you type.</li>
+      <li>Case dates: event date, optional notes, and an optional photo you capture with your camera.</li>
+      <li>Photos added to a date are stored locally on your device; the current cloud sync implementation does not upload photo files or URIs.</li>
+    </ul>
+
+    <h3>Settings and device data</h3>
+    <ul>
+      <li>Timezone (auto-detected and saved to your account for reminders).</li>
+      <li>Notification preference (on/off) and Firebase Cloud Messaging (FCM) device tokens when you enable push reminders.</li>
+      <li>App version, device model/OS version, and language/locale (standard mobile telemetry sent with Firebase SDK requests).</li>
+    </ul>
+
+    <h3>Analytics and diagnostics</h3>
+    <ul>
+      <li>Firebase Analytics events such as screen views and auth flow success/error types. We do not send your case titles, notes, or client names to Analytics.</li>
+      <li>Basic event metadata from Google services (e.g., IP address/device identifiers) to operate the SDKs.</li>
+      <li>Remote Config fetches from Firebase to toggle feature flags; these requests include a Firebase installation ID.</li>
+    </ul>
+
+    <h3>Advertising</h3>
+    <ul>
+      <li>We show in-app ads via Google AdMob. The Google Mobile Ads SDK uses your device advertising identifier (IDFA/GAID), IP address, app events, and device info to deliver and measure ads. You can reset/limit ad identifiers in your device settings, and iOS may ask for tracking permission.</li>
+    </ul>
+
+    <h3>Support</h3>
+    <ul>
+      <li>Information you choose to send us when you contact support (email address and message content).</li>
+    </ul>
+
+    <h2>How We Use Information</h2>
+    <ul>
+      <li>Authenticate you and keep your session active.</li>
+      <li>Store and sync your cases/dates across devices when logged in (Firebase ID token-protected API).</li>
+      <li>Send reminder/push notifications when you opt in and have upcoming dates.</li>
+      <li>Improve reliability and safety (debugging, abuse prevention, securing access).</li>
+      <li>Measure feature usage and app performance (Firebase Analytics/Remote Config).</li>
+      <li>Show and measure ads (Google AdMob).</li>
+      <li>Comply with legal obligations and enforce our terms.</li>
+    </ul>
+
+    <h2>Where Your Data Lives</h2>
+    <ul>
+      <li>On your device: cases, dates, notes, and photos are stored in an on-device database (SQLite/WatermelonDB). Removing a case/date in the app deletes it locally.</li>
+      <li>Cloud sync (default): when signed in, cases and dates sync to our cloud backend hosted in secure data centers (currently in the United States). Sensitive fields (client/opposite party names, titles, details, notes) are encrypted per-user.</li>
+      <li>Notification preferences are stored with your user profile to send reminders.</li>
+      <li>Firebase services (Authentication, Analytics, Remote Config, Cloud Messaging) are operated by Google and store related telemetry.</li>
+    </ul>
+
+    <h2>Sharing and Disclosure</h2>
+    <ul>
+      <li>Service providers: Google Firebase (Auth, Analytics, Remote Config, Cloud Messaging), Google AdMob (ads), AWS (hosting, database, encryption), and mobile platform providers. They process data on our behalf.</li>
+      <li>Legal and safety: if required by law or to protect rights, safety, or the service.</li>
+      <li>Business transfers: if we are involved in a merger, acquisition, or asset sale, your data may be transferred with notice.</li>
+      <li>We do not sell your personal information or share your case content with advertising networks.</li>
+    </ul>
+
+    <h2>Your Choices and Rights</h2>
+    <ul>
+      <li>Manage data in the app: edit or delete cases and dates (including photos). Deleting an item in the app removes it locally and from the synced cloud copy.</li>
+      <li>Notifications: toggle reminders in the Account screen or your device settings; disabling removes the stored FCM token.</li>
+      <li>Ads: reset/limit your device advertising ID (IDFA/GAID) and, on iOS, deny tracking to restrict ad personalization.</li>
+      <li>Access/Deletion: to delete your account or request a copy of your data, contact us at <a href="mailto:support@logiqhat.com">support@logiqhat.com</a>. Account deletion removes cloud copies of your cases/dates and notification tokens.</li>
+      <li>You can sign out at any time; local data remains on the device until you uninstall the app or delete it in-app.</li>
+    </ul>
+
+    <h2>Security</h2>
+    <ul>
+      <li>All network requests use HTTPS.</li>
+      <li>Cloud data is stored in AWS with encryption at rest; sensitive case fields and notes are additionally encrypted with per-user keys managed by AWS KMS.</li>
+      <li>No method of transmission or storage is 100% secure; please use strong, unique passwords for your account.</li>
+    </ul>
+
+    <h2>Children</h2>
+    <p>The app is not directed to children under 13 (or under 16 where applicable), and we do not knowingly collect data from children.</p>
+
+    <h2>International Transfers</h2>
+    <p>Data may be processed and stored in the United States and other countries where our providers operate. These locations may have different data-protection laws than your country.</p>
+
+    <h2>Changes to This Policy</h2>
+    <p>We may update this policy from time to time. The “Last updated” date shows the latest revision. Continued use of the app after changes means you accept the revised policy.</p>
+
+    <h2>Contact</h2>
+    <p>If you have questions or requests about this policy or your data, contact us at <a href="mailto:support@logiqhat.com">support@logiqhat.com</a>.</p>
+  </div>
+</body>
+</html>

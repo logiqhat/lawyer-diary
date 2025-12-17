@@ -12,7 +12,7 @@ import {
   Platform,
   ScrollView,
 } from 'react-native';
-import { sendPasswordResetEmail } from 'firebase/auth';
+import { sendPasswordResetEmail, fetchSignInMethodsForEmail } from 'firebase/auth';
 import { auth } from '../firebase';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import colors from '../theme/colors';
@@ -34,11 +34,27 @@ export default function ForgotPasswordScreen({ navigation }) {
     if (loading || isButtonDisabled) return;
     setLoading(true);
     try {
+      const methods = await fetchSignInMethodsForEmail(auth, trimmedEmail);
+      const hasPasswordProvider = Array.isArray(methods) && methods.includes('password');
+
+      if (!hasPasswordProvider) {
+        const explanation =
+          methods?.length
+            ? 'This account is linked with Google Sign-In. Please sign in with Google or add a password from your account settings.'
+            : 'No account with that email was found. Please check for typos or create an account.';
+        Alert.alert('Reset Password', explanation);
+        logAuthEvent('password_reset', 'error', {
+          method: 'email',
+          error_code: 'no_password_provider',
+        });
+        return;
+      }
+
       await sendPasswordResetEmail(auth, trimmedEmail);
       logAuthEvent('password_reset', 'success', { method: 'email' });
       Alert.alert(
         'Email Sent',
-        `We sent a password reset link to ${trimmedEmail}. Please check your inbox.`,
+        `We sent a password reset link to ${trimmedEmail}. Please check your inbox and spam folder.`,
         [{ text: 'OK', onPress: () => navigation?.goBack?.() }]
       );
     } catch (error) {

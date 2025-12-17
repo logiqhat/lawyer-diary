@@ -12,6 +12,7 @@ import {
   Platform,
   ScrollView,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import {
   signInWithEmailAndPassword,
   GoogleAuthProvider,
@@ -28,6 +29,7 @@ export default function LoginScreen({ navigation }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   useEffect(() => {
     const configureGoogle = async () => {
@@ -57,12 +59,16 @@ export default function LoginScreen({ navigation }) {
       await signInWithEmailAndPassword(auth, trimmedEmail, password);
       logAuthEvent('login', 'success', { method: 'password' });
     } catch (error) {
+      const message =
+        error?.code === 'auth/wrong-password' || error?.code === 'auth/invalid-credential'
+          ? 'Incorrect email or password. Please try again.'
+          : error?.message;
       logAuthEvent('login', 'error', {
         method: 'password',
         error_code: error?.code || 'unknown',
       });
       console.error('[firebase/auth] Email login failed', error);
-      showError(error?.message);
+      showError(message);
     } finally {
       setLoading(false);
     }
@@ -70,12 +76,17 @@ export default function LoginScreen({ navigation }) {
 
   const handleGoogleLogin = async () => {
     try {
-      await GoogleSignin.revokeAccess().catch(() => {});
-      await GoogleSignin.signOut().catch(() => {});
+      // Ensure services available then sign in
+      await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
       const result = await GoogleSignin.signIn();
-      const idToken = result?.data?.idToken;
+      if (result?.type !== 'success') {
+        // Cancelled or in-progress returns a typed object; treat as soft-cancel
+        return;
+      }
+      // On v16, tokens are provided via getTokens
+      const { idToken } = await GoogleSignin.getTokens();
       if (!idToken) {
-        throw new Error('Authentication failure');
+        throw new Error('Google sign-in did not return an ID token. Check webClientId.');
       }
       const credential = GoogleAuthProvider.credential(idToken);
       await signInWithCredential(auth, credential);
@@ -86,7 +97,7 @@ export default function LoginScreen({ navigation }) {
         error_code: error?.code || 'unknown',
       });
       console.error('[firebase/auth] Google sign-in failed', error);
-      showError(error?.message);
+      showError(error?.message || 'Google sign-in failed');
     }
   };
 
@@ -121,17 +132,33 @@ export default function LoginScreen({ navigation }) {
 
             <View style={styles.field}>
               <Text style={styles.label}>Password</Text>
-              <TextInput
-                style={styles.input}
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry
-                autoComplete="password"
-                placeholder="••••••••"
-                placeholderTextColor={colors.placeholder}
-                returnKeyType="done"
-                onSubmitEditing={handleEmailLogin}
-              />
+              <View style={styles.passwordInputWrapper}>
+                <TextInput
+                  style={[styles.input, styles.inputWithToggle]}
+                  value={password}
+                  onChangeText={setPassword}
+                  secureTextEntry={!showPassword}
+                  autoComplete="password"
+                  placeholder="••••••••"
+                  placeholderTextColor={colors.placeholder}
+                  returnKeyType="done"
+                  onSubmitEditing={handleEmailLogin}
+                />
+                <TouchableOpacity
+                  style={styles.toggleSecure}
+                  onPress={() => setShowPassword((prev) => !prev)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${showPassword ? 'Hide' : 'Show'} password`}
+                >
+                  <Ionicons
+                    name={showPassword ? 'eye' : 'eye-off'}
+                    size={22}
+                    color={colors.primary}
+                    accessibilityElementsHidden
+                    importantForAccessibility="no"
+                  />
+                </TouchableOpacity>
+              </View>
             </View>
 
             <TouchableOpacity
@@ -211,6 +238,15 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: colors.textPrimary,
     backgroundColor: colors.surface,
+  },
+  passwordInputWrapper: { position: 'relative' },
+  inputWithToggle: { paddingRight: 80 },
+  toggleSecure: {
+    position: 'absolute',
+    right: 12,
+    top: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
   },
   inlineLink: { alignSelf: 'flex-end', marginTop: 4 },
   inlineLinkLabel: { color: colors.primary, fontWeight: '600', fontSize: 14 },

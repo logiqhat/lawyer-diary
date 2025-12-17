@@ -1,4 +1,4 @@
-import React, { useState, useLayoutEffect, useCallback, useRef } from 'react';
+import React, { useState, useLayoutEffect, useCallback, useRef, useEffect } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
@@ -10,6 +10,7 @@ import {
   StyleSheet,
   Image,
   Alert,
+  Keyboard,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import DateTimePickerModal from 'react-native-modal-datetime-picker';
@@ -98,6 +99,13 @@ export default function AddDateScreen() {
   }));
 
   const notesInputRef = useRef(null);
+
+  // Dismiss the software keyboard when saving/sync overlay is visible
+  useEffect(() => {
+    if (!overlayVisible) return;
+    try { notesInputRef.current?.blur?.(); } catch {}
+    try { Keyboard.dismiss(); } catch {}
+  }, [overlayVisible]);
 
   const saveDate = useCallback(() => {
     const eventDate = toLocalYMD(date);

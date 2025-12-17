@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View, Switch } from 'react-native';
+import { Alert, Linking, ScrollView, StyleSheet, Text, TouchableOpacity, View, Switch } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSelector } from 'react-redux';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
@@ -29,6 +29,8 @@ function formatDateWithTz(dateLike, tz) {
     }
   }
 }
+
+const SUPPORT_EMAIL = 'support@legal-diary.com';
 
 export default function AccountScreen() {
   const [user, setUser] = useState(() => auth.currentUser ?? null);
@@ -114,7 +116,7 @@ export default function AccountScreen() {
   const displayName = user?.displayName;
   // provider and uid intentionally omitted from UI
   const createdAt = user?.metadata?.creationTime;
-  const lastSignIn = user?.metadata?.lastSignInTime;
+  // const lastSignIn = user?.metadata?.lastSignInTime; // removed from UI
   // App version section removed from UI
 
   // Usage summary
@@ -125,21 +127,54 @@ export default function AccountScreen() {
   const handleSignOut = async () => {
     if (signingOut) return;
     setSigningOut(true);
+    let googleSignedIn = false;
     try {
-      await GoogleSignin.revokeAccess();
+      googleSignedIn = await GoogleSignin.isSignedIn();
     } catch (err) {
-      console.warn('Google revoke access failed', err);
+      console.warn('Google sign-in status check failed', err);
     }
     try {
-      await GoogleSignin.signOut();
+      if (googleSignedIn) {
+        await GoogleSignin.revokeAccess();
+        await GoogleSignin.signOut();
+      }
     } catch (err) {
-      console.warn('Google sign out failed', err);
+      console.warn('Google revoke/sign out skipped or failed', err);
     }
     try {
       await signOut(auth);
     } catch (err) {
       console.warn('Sign out failed', err);
       setSigningOut(false);
+    }
+  };
+
+  const showSupportContactInfo = () => {
+    Alert.alert('Contact support', `Please reach us at ${SUPPORT_EMAIL} and we'll assist you.`);
+  };
+
+  const openSupportEmail = async (subject) => {
+    const body = `Hi Lawyer Diary team,
+
+Please share details to help us assist you faster:
+- What happened?
+- What did you expect?
+- Any screenshots or notes?
+
+Account email: ${email}`;
+
+    const mailto = `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    try {
+      const canOpen = await Linking.canOpenURL(mailto);
+      if (canOpen) {
+        await Linking.openURL(mailto);
+      } else {
+        console.warn('No email app available for support contact');
+        showSupportContactInfo();
+      }
+    } catch (err) {
+      console.warn('Failed to start support email', err);
+      showSupportContactInfo();
     }
   };
 
@@ -182,10 +217,7 @@ export default function AccountScreen() {
               disabled={savingNotify}
             />
           </View>
-          <View style={styles.row}>
-            <Text style={styles.rowLabel}>Last sign-in</Text>
-            <Text style={styles.rowValue}>{formatDateWithTz(lastSignIn, timeZone)}</Text>
-          </View>
+          {/* Last sign-in row removed by request */}
         </View>
 
         {showUsageSummary && (
@@ -203,6 +235,33 @@ export default function AccountScreen() {
         )}
 
         {/* App version section removed */}
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Support & Feedback</Text>
+          <Text style={styles.sectionBody}>
+            Need help or noticed a bug? Email us and we&apos;ll get back to you.
+          </Text>
+          <View style={styles.supportActions}>
+            <TouchableOpacity
+              onPress={() => openSupportEmail('Support request')}
+              activeOpacity={0.88}
+              style={[styles.supportButton, styles.supportButtonPrimary]}
+              accessibilityRole="button"
+              accessibilityLabel="Email support"
+            >
+              <Text style={[styles.supportButtonLabel, styles.supportButtonLabelPrimary]}>Contact Support</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => openSupportEmail('Bug report')}
+              activeOpacity={0.88}
+              style={[styles.supportButton, styles.supportButtonSecondary]}
+              accessibilityRole="button"
+              accessibilityLabel="Report a bug"
+            >
+              <Text style={[styles.supportButtonLabel, styles.supportButtonLabelSecondary]}>Report a Bug</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Security</Text>
@@ -320,6 +379,35 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
     maxWidth: '60%',
     textAlign: 'right',
+  },
+  supportActions: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  supportButton: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.borderMuted,
+  },
+  supportButtonPrimary: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  supportButtonSecondary: {
+    backgroundColor: colors.surfaceMuted,
+  },
+  supportButtonLabel: {
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  supportButtonLabelPrimary: {
+    color: colors.primaryOnPrimary,
+  },
+  supportButtonLabelSecondary: {
+    color: colors.textPrimary,
   },
   signOutButton: {
     marginTop: 8,

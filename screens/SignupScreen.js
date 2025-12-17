@@ -121,7 +121,7 @@ export default function SignupScreen({ navigation }) {
                 accessibilityLabel={`${showPassword ? 'Hide' : 'Show'} password`}
               >
                 <Ionicons
-                  name={showPassword ? 'eye-off' : 'eye'}
+                  name={showPassword ? 'eye' : 'eye-off'}
                   size={22}
                   color={colors.primary}
                   accessibilityElementsHidden
