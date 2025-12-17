@@ -12,6 +12,7 @@ import {
   Platform,
   ScrollView,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { createUserWithEmailAndPassword, signOut } from 'firebase/auth';
 import { auth } from '../firebase';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -23,6 +24,7 @@ export default function SignupScreen({ navigation }) {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const emailTrimmed = email.trim();
   const meetsRequirements =
@@ -101,16 +103,32 @@ export default function SignupScreen({ navigation }) {
 
           <View style={styles.field}>
             <Text style={styles.label}>Password</Text>
-            <TextInput
-              style={styles.input}
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry
-              autoComplete="password"
-              placeholder="••••••••"
-              placeholderTextColor={colors.placeholder}
-              returnKeyType="next"
-            />
+            <View style={styles.passwordInputWrapper}>
+              <TextInput
+                style={[styles.input, styles.inputWithToggle]}
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry={!showPassword}
+                autoComplete="password"
+                placeholder="••••••••"
+                placeholderTextColor={colors.placeholder}
+                returnKeyType="next"
+              />
+              <TouchableOpacity
+                style={styles.toggleSecure}
+                onPress={() => setShowPassword((prev) => !prev)}
+                accessibilityRole="button"
+                accessibilityLabel={`${showPassword ? 'Hide' : 'Show'} password`}
+              >
+                <Ionicons
+                  name={showPassword ? 'eye-off' : 'eye'}
+                  size={22}
+                  color={colors.primary}
+                  accessibilityElementsHidden
+                  importantForAccessibility="no"
+                />
+              </TouchableOpacity>
+            </View>
           </View>
 
           <View style={styles.field}>
@@ -119,7 +137,7 @@ export default function SignupScreen({ navigation }) {
               style={styles.input}
               value={confirmPassword}
               onChangeText={setConfirmPassword}
-              secureTextEntry
+              secureTextEntry={!showPassword}
               autoComplete="password"
               placeholder="••••••••"
               placeholderTextColor={colors.placeholder}
@@ -185,6 +203,15 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: colors.textPrimary,
     backgroundColor: colors.surface,
+  },
+  passwordInputWrapper: { position: 'relative' },
+  inputWithToggle: { paddingRight: 80 },
+  toggleSecure: {
+    position: 'absolute',
+    right: 12,
+    top: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
   },
   primaryButton: {
     marginTop: 24,

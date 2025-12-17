@@ -14,7 +14,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import DateTimePickerModal from 'react-native-modal-datetime-picker';
 import { useSelector, useDispatch } from 'react-redux';
-import { useNavigation, useRoute } from '@react-navigation/native';
+import { useNavigation, useRoute, CommonActions } from '@react-navigation/native';
 import uuid from 'react-native-uuid';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -381,6 +381,9 @@ export default function AddDateScreen() {
                 onCancel={() => setDatePickerVisible(false)}
                 minimumDate={new Date(2000, 0, 1)}
                 maximumDate={new Date(2100, 11, 31)}
+                {...(Platform.OS === 'android'
+                  ? { title: 'Select date' }
+                  : {})}
               />
           </View>
 
@@ -452,7 +455,15 @@ export default function AddDateScreen() {
                   text: 'Not now',
                   style: 'cancel',
                   onPress: () => {
-                    navigation.replace('CaseDetail', { caseId: selectedCaseId });
+                    navigation.dispatch(
+                      CommonActions.reset({
+                        index: 1,
+                        routes: [
+                          { name: 'MainTabs' },
+                          { name: 'CaseDetail', params: { caseId: selectedCaseId } },
+                        ],
+                      })
+                    );
                   },
                 },
                 {
@@ -468,13 +479,29 @@ export default function AddDateScreen() {
                     } catch (e) {
                       console.warn('Enable notifications failed', e?.message || e);
                     }
-                    navigation.replace('CaseDetail', { caseId: selectedCaseId });
+                    navigation.dispatch(
+                      CommonActions.reset({
+                        index: 1,
+                        routes: [
+                          { name: 'MainTabs' },
+                          { name: 'CaseDetail', params: { caseId: selectedCaseId } },
+                        ],
+                      })
+                    );
                   },
                 },
               ]
             );
           } else {
-            navigation.replace('CaseDetail', { caseId: selectedCaseId });
+            navigation.dispatch(
+              CommonActions.reset({
+                index: 1,
+                routes: [
+                  { name: 'MainTabs' },
+                  { name: 'CaseDetail', params: { caseId: selectedCaseId } },
+                ],
+              })
+            );
           }
         }}
       />
