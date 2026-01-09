@@ -8,18 +8,25 @@ function readExtra() {
 export function getDbProvider() {
   // ENV has priority so CI/build-time can flip
   const env = (process.env.EXPO_PUBLIC_DB_PROVIDER || process.env.DB_PROVIDER || '').toLowerCase();
-  if (env === 'watermelon' || env === 'sqlite') return env;
+  if (env === 'watermelon') return env;
+  if (env === 'sqlite') {
+    console.warn('[featureFlags] SQLite provider no longer supported. Falling back to Watermelon.');
+    return 'watermelon';
+  }
 
   // Fallback to app.json extra
   const extra = readExtra();
   const fromConfig = (extra.dbProvider || extra.DB_PROVIDER || '').toLowerCase();
-  if (fromConfig === 'watermelon' || fromConfig === 'sqlite') return fromConfig;
+  if (fromConfig === 'watermelon') return fromConfig;
+  if (fromConfig === 'sqlite') {
+    console.warn('[featureFlags] SQLite provider no longer supported. Falling back to Watermelon.');
+    return 'watermelon';
+  }
 
   // Default provider
-  return 'sqlite';
+  return 'watermelon';
 }
 
 export function usingWatermelon() {
   return getDbProvider() === 'watermelon';
 }
-

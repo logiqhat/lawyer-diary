@@ -19,37 +19,62 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import colors from '../theme/colors';
 import { logAuthEvent } from '../services/analytics';
 
+function isValidEmail(str) {
+  return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(str);
+}
+
+function friendlyAuthError(error) {
+  const code = error?.code || '';
+  if (code === 'auth/email-already-in-use') {
+    return 'That email is already registered. Please sign in or use a different email.';
+  }
+  if (code === 'auth/invalid-email') {
+    return 'Please enter a valid email address.';
+  }
+  if (code === 'auth/weak-password') {
+    return 'Password is too weak. Please choose a stronger password.';
+  }
+  return 'Unable to create account, please try again.';
+}
+
 export default function SignupScreen({ navigation }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [emailTouched, setEmailTouched] = useState(false);
+  const [passwordTouched, setPasswordTouched] = useState(false);
+  const [confirmTouched, setConfirmTouched] = useState(false);
 
   const emailTrimmed = email.trim();
   const meetsRequirements =
     emailTrimmed !== '' &&
+    isValidEmail(emailTrimmed) &&
     password.length >= 6 &&
     password === confirmPassword;
   const isButtonDisabled = loading || !meetsRequirements;
 
+  const emailError = emailTouched
+    ? (!emailTrimmed ? 'Please enter an email address.' : !isValidEmail(emailTrimmed) ? 'Please enter a valid email address.' : '')
+    : '';
+  const passwordError = passwordTouched
+    ? (!password ? 'Please enter a password.' : password.length < 6 ? 'Password should be at least 6 characters long.' : '')
+    : '';
+  const confirmError = confirmTouched
+    ? (!confirmPassword ? 'Please confirm your password.' : password !== confirmPassword ? 'Passwords do not match.' : '')
+    : '';
+
+  const getFirstError = () => emailError || passwordError || confirmError || '';
+
   const handleSignup = async () => {
+    setEmailTouched(true);
+    setPasswordTouched(true);
+    setConfirmTouched(true);
+    const validationError = getFirstError();
+    if (validationError) return Alert.alert('Create Account', validationError);
+    if (loading) return;
     const trimmedEmail = emailTrimmed;
-    if (!trimmedEmail) {
-      Alert.alert('Create Account', 'Please enter an email address.');
-      return;
-    }
-
-    if (password.length < 6) {
-      Alert.alert('Create Account', 'Password should be at least 6 characters long.');
-      return;
-    }
-    if (password !== confirmPassword) {
-      Alert.alert('Create Account', 'Passwords do not match.');
-      return;
-    }
-
-    if (!meetsRequirements || loading) return;
     setLoading(true);
     try {
       await createUserWithEmailAndPassword(auth, trimmedEmail, password);
@@ -67,8 +92,7 @@ export default function SignupScreen({ navigation }) {
         error_code: error?.code || 'unknown',
       });
       console.error('[firebase/auth] Sign-up failed', error);
-      const message = error?.message || 'Unable to create account, please try again.';
-      Alert.alert('Create Account', message);
+      Alert.alert('Create Account', friendlyAuthError(error));
     } finally {
       setLoading(false);
     }
@@ -91,7 +115,10 @@ export default function SignupScreen({ navigation }) {
             <TextInput
               style={styles.input}
               value={email}
-              onChangeText={setEmail}
+              onChangeText={(text) => {
+                setEmail(text);
+                if (!emailTouched && text.length > 0) setEmailTouched(true);
+              }}
               autoCapitalize="none"
               autoComplete="email"
               keyboardType="email-address"
@@ -99,6 +126,7 @@ export default function SignupScreen({ navigation }) {
               placeholderTextColor={colors.placeholder}
               returnKeyType="next"
             />
+            {!!emailError && <Text style={styles.inlineError}>{emailError}</Text>}
           </View>
 
           <View style={styles.field}>
@@ -107,7 +135,10 @@ export default function SignupScreen({ navigation }) {
               <TextInput
                 style={[styles.input, styles.inputWithToggle]}
                 value={password}
-                onChangeText={setPassword}
+                onChangeText={(text) => {
+                  setPassword(text);
+                  if (!passwordTouched && text.length > 0) setPasswordTouched(true);
+                }}
                 secureTextEntry={!showPassword}
                 autoComplete="password"
                 placeholder="••••••••"
@@ -129,6 +160,7 @@ export default function SignupScreen({ navigation }) {
                 />
               </TouchableOpacity>
             </View>
+            {!!passwordError && <Text style={styles.inlineError}>{passwordError}</Text>}
           </View>
 
           <View style={styles.field}>
@@ -136,7 +168,10 @@ export default function SignupScreen({ navigation }) {
             <TextInput
               style={styles.input}
               value={confirmPassword}
-              onChangeText={setConfirmPassword}
+              onChangeText={(text) => {
+                setConfirmPassword(text);
+                if (!confirmTouched && text.length > 0) setConfirmTouched(true);
+              }}
               secureTextEntry={!showPassword}
               autoComplete="password"
               placeholder="••••••••"
@@ -144,6 +179,7 @@ export default function SignupScreen({ navigation }) {
               returnKeyType="done"
               onSubmitEditing={handleSignup}
             />
+            {!!confirmError && <Text style={styles.inlineError}>{confirmError}</Text>}
           </View>
 
         <TouchableOpacity
@@ -159,10 +195,18 @@ export default function SignupScreen({ navigation }) {
             </Text>
           )}
         </TouchableOpacity>
-
           <View style={styles.footerLinks}>
             <Text style={styles.footerText}>Already have an account?</Text>
-            <TouchableOpacity onPress={() => navigation?.navigate?.('Login')}>
+            <TouchableOpacity
+              onPress={() => {
+                if (navigation?.canGoBack?.()) {
+                  navigation.goBack();
+                } else {
+                  navigation?.navigate?.('Login');
+                }
+              }}
+              style={{ paddingVertical: 8 }}
+            >
               <Text style={styles.footerLink}>Sign in</Text>
             </TouchableOpacity>
           </View>
@@ -178,7 +222,7 @@ const styles = StyleSheet.create({
   scrollContent: {
     flexGrow: 1,
     paddingHorizontal: 24,
-    paddingTop: 48,
+    paddingTop: 24,
     paddingBottom: 32,
   },
   title: {
@@ -192,7 +236,7 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     marginBottom: 32,
   },
-  field: { marginBottom: 16 },
+  field: { marginBottom: 12 },
   label: { fontSize: 14, fontWeight: '600', color: colors.textPrimary, marginBottom: 6 },
   input: {
     borderWidth: 1,
@@ -225,12 +269,28 @@ const styles = StyleSheet.create({
   },
   primaryLabel: { fontSize: 16, fontWeight: '700', color: colors.primaryOnPrimary },
   primaryLabelDisabled: { color: colors.primaryOnPrimary, opacity: 0.6 },
+  inlineError: {
+    marginTop: 6,
+    marginBottom: 0,
+    color: colors.error || '#d32f2f',
+    textAlign: 'left',
+    fontSize: 13,
+  },
   footerLinks: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
+    flexWrap: 'wrap',
+    columnGap: 6,
+    rowGap: 4,
     marginTop: 24,
   },
   footerText: { color: colors.textSecondary, fontSize: 14 },
-  footerLink: { color: colors.primary, fontSize: 14, fontWeight: '600', marginLeft: 6 },
+  footerLink: {
+    color: colors.primary,
+    fontSize: 14,
+    fontWeight: '600',
+    marginLeft: 6,
+    textDecorationLine: 'underline',
+  },
 });

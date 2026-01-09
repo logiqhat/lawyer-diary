@@ -11,6 +11,7 @@ import {
   Image,
   Alert,
   Keyboard,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import DateTimePickerModal from 'react-native-modal-datetime-picker';
@@ -39,6 +40,9 @@ const toLocalYMD = (d) => {
   const day = String(d.getDate()).padStart(2, '0');
   return `${y}-${m}-${day}`;
 };
+
+const NOTIFY_ENABLED_KEY = 'settings:notifyEnabled';
+const FCM_TOKEN_TIMEOUT_MS = 2000;
 
 export default function AddDateScreen() {
   const navigation = useNavigation();
@@ -71,6 +75,7 @@ export default function AddDateScreen() {
   const [overlayStage, setOverlayStage] = useState(0);
   const [overlayErrorText, setOverlayErrorText] = useState('');
   const [pendingEnableNotifPrompt, setPendingEnableNotifPrompt] = useState(false);
+  const [photoLoading, setPhotoLoading] = useState(false);
 
   // Derived state
   const selectedCase = cases.find((c) => c.id === selectedCaseId);
@@ -107,6 +112,18 @@ export default function AddDateScreen() {
     try { Keyboard.dismiss(); } catch {}
   }, [overlayVisible]);
 
+  const navigateToCaseDetail = () => {
+    navigation.dispatch(
+      CommonActions.reset({
+        index: 1,
+        routes: [
+          { name: 'MainTabs' },
+          { name: 'CaseDetail', params: { caseId: selectedCaseId } },
+        ],
+      })
+    );
+  };
+
   const saveDate = useCallback(() => {
     const eventDate = toLocalYMD(date);
     const now = Date.now();
@@ -138,7 +155,7 @@ export default function AddDateScreen() {
       // If this becomes the second date overall and notifications are off, queue prompt.
       (async () => {
         try {
-          const pref = await AsyncStorage.getItem('settings:notifyEnabled');
+          const pref = await AsyncStorage.getItem(NOTIFY_ENABLED_KEY);
           const enabled = pref === 'true';
           if (!enabled && (caseDates?.length || 0) === 1) {
             setPendingEnableNotifPrompt(true);
@@ -249,48 +266,26 @@ export default function AddDateScreen() {
     })
   }, [navigation, onSubmit, canSave, existingDate, overlayVisible]);
 
-  // Request permissions; do not block camera if photo library is denied.
-  const requestPermissions = async () => {
-    try {
-      const camera = await ImagePicker.requestCameraPermissionsAsync();
-      const canUseCamera = camera.status === 'granted';
-      if (!canUseCamera) {
-        Alert.alert('Camera Access Needed', 'Please allow camera access to take a photo.');
-        return { canUseCamera: false, canSaveToPhotos: false };
-      }
-
-      // Request add-only media library permission for saving to Photos (non-blocking)
-      let canSaveToPhotos = false;
-      try {
-        const media = await ImagePicker.requestMediaLibraryPermissionsAsync(true);
-        canSaveToPhotos = media.status === 'granted';
-      } catch (e) {
-        console.warn('Media library permission request failed:', e);
-      }
-
-      return { canUseCamera: true, canSaveToPhotos };
-    } catch (e) {
-      console.warn('Permission flow failed:', e);
-      Alert.alert('Permissions Error', 'Could not request required permissions.');
-      return { canUseCamera: false, canSaveToPhotos: false };
-    }
-  };
-
   const handleCapturePhoto = async () => {
-    const { canUseCamera, canSaveToPhotos } = await requestPermissions();
-    if (!canUseCamera) return;
+    if (photoLoading) return;
+    console.log('[AddDateScreen] handlePickPhoto: pressed');
     try {
-      const result = await ImagePicker.launchCameraAsync({
-        mediaTypes: 'images',
+      setPhotoLoading(true);
+      console.log('[AddDateScreen] launching image library');
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
         quality: 0.8,
-        saveToPhotos: !!canSaveToPhotos,
       });
+      console.log('[AddDateScreen] library result:', result);
       if (!result.canceled && result.assets?.length) {
         setPhotoUri(result.assets[0].uri);
+        console.log('[AddDateScreen] photoUri set from library:', result.assets[0].uri);
       }
-    } catch (error) {
-      Alert.alert('Camera Error', 'We could not open the camera. Please try again.');
-      console.warn('Camera capture failed', error);
+    } catch (e) {
+      console.warn('[AddDateScreen] Image library error', e);
+      Alert.alert('Photo Error', 'We could not open your photo library. Please try again.');
+    } finally {
+      setPhotoLoading(false);
     }
   };
 
@@ -299,7 +294,7 @@ export default function AddDateScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={styles.safeArea} edges={['left', 'right', 'bottom']}>
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -437,9 +432,20 @@ export default function AddDateScreen() {
                 accessibilityRole="button"
                 accessibilityLabel="Capture photo"
               >
-                <Ionicons name="camera-outline" size={28} color={colors.iconSubtle} />
-                <Text style={styles.photoPlaceholderLabel}>Tap to add a photo</Text>
-                <Text style={styles.photoTipLabel}>Summons, orders, receipts — anything you’ll need later</Text>
+                {photoLoading ? (
+                  <>
+                    <ActivityIndicator size="small" color={colors.primary} />
+                    <Text style={styles.photoLoadingLabel}>Opening gallery…</Text>
+                  </>
+                ) : (
+                  <>
+                    <Ionicons name="images-outline" size={28} color={colors.iconSubtle} />
+                    <Text style={styles.photoPlaceholderLabel}>Tap to choose a photo</Text>
+                    <Text style={styles.photoTipLabel}>
+                      Summons, orders, receipts — anything you’ll need later
+                    </Text>
+                  </>
+                )}
               </TouchableOpacity>
             )}
           </View>
@@ -452,8 +458,19 @@ export default function AddDateScreen() {
         onContinue={() => {
           setOverlayVisible(false);
           setOverlayErrorText('');
-          // After save complete, optionally prompt to enable notifications (on 2nd date added)
-          if (pendingEnableNotifPrompt) {
+          (async () => {
+            // After save complete, optionally prompt to enable notifications (on 2nd date added)
+            let shouldPrompt = pendingEnableNotifPrompt;
+            if (shouldPrompt) {
+              try {
+                const pref = await AsyncStorage.getItem(NOTIFY_ENABLED_KEY);
+                shouldPrompt = pref !== 'true';
+              } catch {}
+            }
+            if (!shouldPrompt) {
+              navigateToCaseDetail();
+              return;
+            }
             setPendingEnableNotifPrompt(false);
             Alert.alert(
               'Turn on reminders?',
@@ -462,55 +479,65 @@ export default function AddDateScreen() {
                 {
                   text: 'Not now',
                   style: 'cancel',
-                  onPress: () => {
-                    navigation.dispatch(
-                      CommonActions.reset({
-                        index: 1,
-                        routes: [
-                          { name: 'MainTabs' },
-                          { name: 'CaseDetail', params: { caseId: selectedCaseId } },
-                        ],
-                      })
-                    );
-                  },
+                  onPress: navigateToCaseDetail,
                 },
                 {
                   text: 'Enable',
                   style: 'default',
                   onPress: async () => {
-                    try { await AsyncStorage.setItem('settings:notifyEnabled', 'true'); } catch {}
+                    let fcmToken = null;
+                    let tokenTimedOut = false;
                     try {
-                      const token = await registerForFcmTokenAsync();
+                      let timeoutId;
+                      let tokenResult;
+                      try {
+                        tokenResult = await Promise.race([
+                          registerForFcmTokenAsync(),
+                          new Promise((resolve) => {
+                            timeoutId = setTimeout(
+                              () => resolve({ timeout: true }),
+                              FCM_TOKEN_TIMEOUT_MS
+                            );
+                          }),
+                        ]);
+                      } finally {
+                        if (timeoutId) clearTimeout(timeoutId);
+                      }
+                      tokenTimedOut = !!tokenResult?.timeout;
+                      fcmToken = tokenTimedOut ? null : tokenResult || null;
+                    } catch (e) {
+                      console.warn('Enable notifications failed', e?.message || e);
+                    }
+                    try {
+                      await AsyncStorage.setItem(
+                        NOTIFY_ENABLED_KEY,
+                        fcmToken ? 'true' : 'false'
+                      );
+                    } catch {}
+                    try {
                       await apiClient.post('/users', {
-                        body: { notifyEnabled: true, ...(token ? { fcmToken: token } : {}) },
+                        body: { notifyEnabled: !!fcmToken, ...(fcmToken ? { fcmToken } : {}) },
                       });
                     } catch (e) {
                       console.warn('Enable notifications failed', e?.message || e);
                     }
-                    navigation.dispatch(
-                      CommonActions.reset({
-                        index: 1,
-                        routes: [
-                          { name: 'MainTabs' },
-                          { name: 'CaseDetail', params: { caseId: selectedCaseId } },
-                        ],
-                      })
-                    );
+                    if (!fcmToken) {
+                      try {
+                        const title = tokenTimedOut
+                          ? 'Notifications timed out'
+                          : 'Notifications blocked';
+                        const message = tokenTimedOut
+                          ? 'We could not finish setting up notifications. Reminders are off for now. You can try again or enable notifications in your phone settings.'
+                          : 'Reminders are off because notifications are disabled for Lawyer Diary. You can enable them in your phone settings to turn reminders on.';
+                        Alert.alert(title, message);
+                      } catch {}
+                    }
+                    navigateToCaseDetail();
                   },
                 },
               ]
             );
-          } else {
-            navigation.dispatch(
-              CommonActions.reset({
-                index: 1,
-                routes: [
-                  { name: 'MainTabs' },
-                  { name: 'CaseDetail', params: { caseId: selectedCaseId } },
-                ],
-              })
-            );
-          }
+          })();
         }}
       />
     </SafeAreaView>
@@ -520,7 +547,7 @@ export default function AddDateScreen() {
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: colors.surface },
   flex: { flex: 1 },
-  form: { padding: 16 },
+  form: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 16 },
   field: { marginBottom: 20 },
   label: { fontSize: 16, fontWeight: '600', color: colors.textPrimary, marginBottom: 8 },
   required: { color: colors.dangerText },
@@ -607,6 +634,10 @@ const styles = StyleSheet.create({
     marginTop: 4,
     color: colors.textMuted,
     fontSize: 12,
+  },
+  photoLoadingLabel: {
+    fontSize: 13,
+    color: colors.textSecondary,
   },
   captureButton: {
     flexDirection: 'row',

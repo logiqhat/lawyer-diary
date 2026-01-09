@@ -31,6 +31,33 @@ export default function LoginScreen({ navigation }) {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
+  const friendlyPasswordLoginError = (error) => {
+    const code = error?.code || '';
+    if (
+      code === 'auth/wrong-password' ||
+      code === 'auth/invalid-credential' ||
+      code === 'auth/user-not-found'
+    ) {
+      return 'Incorrect email or password. Please try again.';
+    }
+    if (code === 'auth/too-many-requests') {
+      return 'Too many attempts. Please wait a bit and try again.';
+    }
+    if (code === 'auth/network-request-failed') {
+      return 'Unable to reach the server. Check your internet connection and try again.';
+    }
+    return 'We couldn’t sign you in right now. Please try again in a moment.';
+  };
+
+  const friendlyGoogleLoginError = (error) => {
+    const code = error?.code || '';
+    if (code === 'auth/network-request-failed') {
+      return 'Unable to connect to Google. Check your internet connection and try again.';
+    }
+    // Treat all other cases as a generic user-friendly error
+    return 'We couldn’t complete Google sign-in. Please try again.';
+  };
+
   useEffect(() => {
     const configureGoogle = async () => {
       try {
@@ -59,10 +86,7 @@ export default function LoginScreen({ navigation }) {
       await signInWithEmailAndPassword(auth, trimmedEmail, password);
       logAuthEvent('login', 'success', { method: 'password' });
     } catch (error) {
-      const message =
-        error?.code === 'auth/wrong-password' || error?.code === 'auth/invalid-credential'
-          ? 'Incorrect email or password. Please try again.'
-          : error?.message;
+      const message = friendlyPasswordLoginError(error);
       logAuthEvent('login', 'error', {
         method: 'password',
         error_code: error?.code || 'unknown',
@@ -97,7 +121,8 @@ export default function LoginScreen({ navigation }) {
         error_code: error?.code || 'unknown',
       });
       console.error('[firebase/auth] Google sign-in failed', error);
-      showError(error?.message || 'Google sign-in failed');
+      const message = friendlyGoogleLoginError(error);
+      showError(message);
     }
   };
 
@@ -212,7 +237,7 @@ const styles = StyleSheet.create({
   scrollContent: {
     flexGrow: 1,
     paddingHorizontal: 24,
-    paddingTop: 48,
+    paddingTop: 24,
     paddingBottom: 32,
   },
   content: { flexGrow: 1 },
@@ -248,8 +273,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 6,
   },
-  inlineLink: { alignSelf: 'flex-end', marginTop: 4 },
-  inlineLinkLabel: { color: colors.primary, fontWeight: '600', fontSize: 14 },
+  inlineLink: {
+    alignSelf: 'flex-end',
+    marginTop: 4,
+    paddingVertical: 8,
+  },
+  inlineLinkLabel: {
+    color: colors.primary,
+    fontWeight: '600',
+    fontSize: 14,
+    textDecorationLine: 'underline',
+  },
   primaryButton: {
     marginTop: 24,
     backgroundColor: colors.primary,
@@ -276,8 +310,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
+    flexWrap: 'wrap',
+    columnGap: 6,
+    rowGap: 4,
     marginTop: 24,
   },
   footerText: { color: colors.textSecondary, fontSize: 14 },
-  footerLink: { color: colors.primary, fontSize: 14, fontWeight: '600', marginLeft: 6 },
+  footerLink: {
+    color: colors.primary,
+    fontSize: 14,
+    fontWeight: '600',
+    marginLeft: 6,
+    textDecorationLine: 'underline',
+  },
 });

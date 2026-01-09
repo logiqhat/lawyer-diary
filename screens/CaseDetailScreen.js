@@ -311,7 +311,9 @@ const styles = StyleSheet.create({
     marginTop: 6,
   },
   metaRole: {
-    width: 84,
+    width: 96,
+    minWidth: 96,
+    marginRight: 8,
     color: colors.textSecondary,
     fontSize: 12,
     fontWeight: '700',

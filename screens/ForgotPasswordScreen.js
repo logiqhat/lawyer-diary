@@ -18,6 +18,23 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import colors from '../theme/colors';
 import { logAuthEvent } from '../services/analytics';
 
+function friendlyPasswordResetError(error) {
+  const code = error?.code || '';
+  if (code === 'auth/invalid-email') {
+    return 'Please enter a valid email address.';
+  }
+  if (code === 'auth/user-not-found') {
+    return 'No account with that email was found. Please check for typos or create an account.';
+  }
+  if (code === 'auth/too-many-requests') {
+    return 'Too many password reset attempts. Please wait a bit and try again.';
+  }
+  if (code === 'auth/network-request-failed') {
+    return 'Unable to reach the server. Check your internet connection and try again.';
+  }
+  return 'Unable to send reset email. Please try again.';
+}
+
 export default function ForgotPasswordScreen({ navigation }) {
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
@@ -63,7 +80,7 @@ export default function ForgotPasswordScreen({ navigation }) {
         error_code: error?.code || 'unknown',
       });
       console.error('[firebase/auth] Password reset email failed', error);
-      const message = error?.message || 'Unable to send reset email. Please try again.';
+      const message = friendlyPasswordResetError(error);
       Alert.alert('Reset Password', message);
     } finally {
       setLoading(false);
@@ -174,6 +191,12 @@ const styles = StyleSheet.create({
   footerLink: {
     marginTop: 24,
     alignSelf: 'center',
+    paddingVertical: 8,
   },
-  footerLinkLabel: { color: colors.primary, fontSize: 14, fontWeight: '600' },
+  footerLinkLabel: {
+    color: colors.primary,
+    fontSize: 14,
+    fontWeight: '600',
+    textDecorationLine: 'underline',
+  },
 });

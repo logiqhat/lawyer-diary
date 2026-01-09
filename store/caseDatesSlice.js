@@ -3,16 +3,18 @@ import { createSlice, createAsyncThunk } from '@reduxjs/toolkit'
 import { dateService } from '../database'
 import { removeCase } from './casesSlice'
 
+const initialState = {
+  items: [],
+  loading: false,
+  error: null,
+}
+
 // Async thunks for database operations
 export const fetchDates = createAsyncThunk(
   'caseDates/fetchDates',
   async (_, { rejectWithValue }) => {
     try {
-      console.log('Fetching dates from database...');
       const dates = await dateService.getAllDates()
-      console.log('Fetched dates:', dates);
-      console.log('Dates type:', typeof dates, 'Is array:', Array.isArray(dates));
-      
       if (!Array.isArray(dates)) {
         console.error('Database returned non-array data:', dates);
         return rejectWithValue('Database returned invalid data format');
@@ -52,15 +54,12 @@ export const removeDate = createAsyncThunk(
 
 const caseDatesSlice = createSlice({
   name: 'caseDates',
-  initialState: {
-    items: [],
-    loading: false,
-    error: null
-  },
+  initialState,
   reducers: {
     clearError: (state) => {
       state.error = null
-    }
+    },
+    resetState: () => ({ ...initialState, items: [] }),
   },
   extraReducers: (builder) => {
     builder
@@ -111,5 +110,5 @@ const caseDatesSlice = createSlice({
   }
 })
 
-export const { clearError } = caseDatesSlice.actions
+export const { clearError, resetState: resetCaseDatesState } = caseDatesSlice.actions
 export default caseDatesSlice.reducer

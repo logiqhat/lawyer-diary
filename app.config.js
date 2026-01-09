@@ -47,10 +47,10 @@ export default () => {
 
   return {
     expo: {
-      name: 'LawyerDiary',
+      name: 'Docket - Lawyer Diary',
       slug: 'LawyerDiary',
       owner: 'logiqhat',
-      version: '1.0.0',
+      version: '1.2.0',
       orientation: 'portrait',
       icon: './assets/icon.png',
       userInterfaceStyle: 'light',
@@ -74,7 +74,9 @@ export default () => {
         googleServicesFile: resolveGoogleServicesFile(),
         versionCode: 1,
         permissions: [
-          'com.google.android.gms.permission.AD_ID'
+          'com.google.android.gms.permission.AD_ID',
+          'android.permission.READ_MEDIA_IMAGES',
+          'android.permission.READ_EXTERNAL_STORAGE'
         ],
         adaptiveIcon: {
           foregroundImage: './assets/adaptive-foreground.png',
@@ -98,7 +100,6 @@ export default () => {
        }
       },
       plugins: [
-        'expo-sqlite',
         'expo-web-browser',
         'expo-file-system',
         '@react-native-google-signin/google-signin',
@@ -109,6 +110,7 @@ export default () => {
             androidAppId: resolveAndroidAdmobAppId(),
           },
         ],
+        'expo-image-picker',
       ],
     },
   };

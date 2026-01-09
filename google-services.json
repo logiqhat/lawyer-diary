@@ -14,6 +14,22 @@
       },
       "oauth_client": [
         {
+          "client_id": "306995543731-71ch58ocp40pv3kljsafdu98tmgm35jf.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.logiqhat.lawyerdiary",
+            "certificate_hash": "269f47059ab41a5ad4e95ae6bea08d303f682dd7"
+          }
+        },
+        {
+          "client_id": "306995543731-iqgps2ei9d6repuikg42a6deprbsprj0.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.logiqhat.lawyerdiary",
+            "certificate_hash": "5e8f16062ea3cd2c4a0d547876baa6f38cabf625"
+          }
+        },
+        {
           "client_id": "306995543731-4dmtrus9bm8bkan739ed514q8d94r0cv.apps.googleusercontent.com",
           "client_type": 3
         }

@@ -4,6 +4,14 @@
 // This module avoids importing WatermelonDB at top-level to keep optional.
 
 let dbInstance = null
+let currentDbName = 'lawyerdiary'
+
+export function setWatermelonDbName(name) {
+  if (!name || name === currentDbName) return
+  currentDbName = name
+  // Force a fresh instance next time to avoid cross-account data.
+  dbInstance = null
+}
 
 async function ensureDatabase() {
   if (dbInstance) return dbInstance
@@ -14,7 +22,7 @@ async function ensureDatabase() {
     const { Case } = require('./wm/models/Case')
     const { CaseDate } = require('./wm/models/CaseDate')
 
-    const adapter = new SQLiteAdapter({ schema, dbName: 'lawyerdiary', jsi: true })
+    const adapter = new SQLiteAdapter({ schema, dbName: currentDbName, jsi: true })
     dbInstance = new Database({ adapter, modelClasses: [Case, CaseDate] })
     return dbInstance
   } catch (e) {

@@ -72,18 +72,25 @@ function toServerDate(r) {
   }
 }
 
-const LAST_KEY = 'sync:lastPulledAt'
-
+const LAST_KEY_BASE = 'sync:lastPulledAt'
+const lastKeyForUser = (uid) => `${LAST_KEY_BASE}:${uid || "unknown"}`
 async function getLastPulledAt() {
   try {
-    const v = await AsyncStorage.getItem(LAST_KEY)
+    const uid = auth?.currentUser?.uid
+    const v = await AsyncStorage.getItem(lastKeyForUser(uid))
     return v ? Number(v) : 0
   } catch {
     return 0
   }
 }
 async function setLastPulledAt(ms) {
-  try { await AsyncStorage.setItem(LAST_KEY, String(ms || 0)) } catch {}
+  try {
+    const uid = auth?.currentUser?.uid
+    await AsyncStorage.setItem(lastKeyForUser(uid), String(ms || 0))
+  } catch {}
+}
+export async function clearSyncStateForUser(uid) {
+  try { await AsyncStorage.removeItem(lastKeyForUser(uid)) } catch {}
 }
 
 export async function syncNow() {

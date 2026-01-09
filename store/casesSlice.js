@@ -1,6 +1,12 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit'
 import { caseService } from '../database'
 
+const initialState = {
+  items: [],
+  loading: false,
+  error: null,
+}
+
 // Thunk + slice flow (quick map):
 // 1) UI calls dispatch(addCase(payload))
 // 2) The addCase thunk below runs its async function, persists via caseService, then returns payload
@@ -14,11 +20,7 @@ export const fetchCases = createAsyncThunk(
   'cases/fetchCases',
   async (_, { rejectWithValue }) => {
     try {
-      console.log('Fetching cases from database...');
       const cases = await caseService.getAllCases()
-      console.log('Fetched cases:', cases);
-      console.log('Cases type:', typeof cases, 'Is array:', Array.isArray(cases));
-      
       if (!Array.isArray(cases)) {
         console.error('Database returned non-array data:', cases);
         return rejectWithValue('Database returned invalid data format');
@@ -61,15 +63,12 @@ export const removeCase = createAsyncThunk(
 
 const casesSlice = createSlice({
   name: 'cases',
-  initialState: {
-    items: [],
-    loading: false,
-    error: null
-  },
+  initialState,
   reducers: {
     clearError: (state) => {
       state.error = null
-    }
+    },
+    resetState: () => ({ ...initialState, items: [] }),
   },
   extraReducers: (builder) => {
     builder
@@ -79,16 +78,12 @@ const casesSlice = createSlice({
         state.error = null
       })
       .addCase(fetchCases.fulfilled, (state, action) => {
-        console.log('fetchCases.fulfilled - payload:', action.payload);
-        console.log('fetchCases.fulfilled - current state.items:', state.items);
         state.loading = false
         // Clear existing items and add new ones
         state.items.length = 0
         if (action.payload && Array.isArray(action.payload)) {
-          console.log('Adding cases to state:', action.payload.length, 'items');
           state.items.push(...action.payload)
         }
-        console.log('fetchCases.fulfilled - final state.items:', state.items);
       })
       .addCase(fetchCases.rejected, (state, action) => {
         state.loading = false
@@ -115,5 +110,5 @@ const casesSlice = createSlice({
   }
 })
 
-export const { clearError } = casesSlice.actions
+export const { clearError, resetState: resetCasesState } = casesSlice.actions
 export default casesSlice.reducer

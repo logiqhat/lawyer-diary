@@ -6,8 +6,22 @@ export async function registerForFcmTokenAsync() {
     // On Android 13+, request POST_NOTIFICATIONS permission
     if (Platform.OS === 'android' && Platform.Version >= 33) {
       try {
-        await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS)
-      } catch {}
+        const result = await PermissionsAndroid.request(
+          PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS
+        )
+        if (result !== PermissionsAndroid.RESULTS.GRANTED) {
+          try {
+            console.log('[pushNotificationsFcm] POST_NOTIFICATIONS not granted', { result })
+          } catch {}
+          return null
+        }
+      } catch (e) {
+        console.warn(
+          '[pushNotificationsFcm] POST_NOTIFICATIONS request failed',
+          e?.message || e
+        )
+        return null
+      }
     }
     const authStatus = await messaging().requestPermission()
     const enabled = authStatus === messaging.AuthorizationStatus.AUTHORIZED || authStatus === messaging.AuthorizationStatus.PROVISIONAL
@@ -19,4 +33,3 @@ export async function registerForFcmTokenAsync() {
     return null
   }
 }
-

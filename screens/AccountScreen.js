@@ -1,14 +1,13 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Alert, Linking, ScrollView, StyleSheet, Text, TouchableOpacity, View, Switch } from 'react-native';
+import { Alert, Linking, ScrollView, Share, StyleSheet, Text, TouchableOpacity, View, Switch } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useSelector } from 'react-redux';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
+import { Ionicons } from '@expo/vector-icons';
 import { auth } from '../firebase';
 import Screen from '../components/Screen';
 import colors from '../theme/colors';
 import { useUserTimeZone } from '../hooks/useUserTimeZone';
-import { useFeatureFlags } from '../context/FeatureFlagsContext';
 import { apiClient } from '../services/apiClient';
 import { registerForFcmTokenAsync } from '../services/pushNotificationsFcm';
 
@@ -31,19 +30,18 @@ function formatDateWithTz(dateLike, tz) {
 }
 
 const SUPPORT_EMAIL = 'support@legal-diary.com';
+const BUG_EMAIL = 'bug@lawyer-diary.com';
+const PLAY_STORE_URL = 'https://play.google.com/store/apps/details?id=com.logiqhat.lawyerdiary';
 
 export default function AccountScreen() {
   const [user, setUser] = useState(() => auth.currentUser ?? null);
   const [signingOut, setSigningOut] = useState(false);
   const timeZone = useUserTimeZone();
-  const { showUsageSummary } = useFeatureFlags() || { showUsageSummary: false };
-  const caseItems = useSelector((s) => s.cases?.items || []);
-  const dateItems = useSelector((s) => s.caseDates?.items || []);
-  const [lastSync, setLastSync] = useState(null);
-  const [notifyEnabled, setNotifyEnabled] = useState(false);
+  const [notifyPrefEnabled, setNotifyPrefEnabled] = useState(false);
   const [savingNotify, setSavingNotify] = useState(false);
 
   const NOTIFY_ENABLED_KEY = 'settings:notifyEnabled';
+  const FCM_TOKEN_TIMEOUT_MS = 2000;
 
   useEffect(() => {
     const unsub = onAuthStateChanged(
@@ -54,55 +52,114 @@ export default function AccountScreen() {
     return () => unsub();
   }, []);
 
-  // Load last sync timestamp (Watermelon sync writes this key)
-  useEffect(() => {
-    (async () => {
-      try {
-        const v = await AsyncStorage.getItem('sync:lastPulledAt');
-        setLastSync(v ? Number(v) : null);
-      } catch {
-        setLastSync(null);
-      }
-    })();
-  }, []);
-
   // Load saved notification preference
   useEffect(() => {
     (async () => {
       try {
         const saved = await AsyncStorage.getItem(NOTIFY_ENABLED_KEY);
-        if (saved != null) setNotifyEnabled(saved === 'true');
-      } catch {}
+        console.log('[AccountScreen] Loaded notify preference from storage', { saved });
+        if (saved != null) setNotifyPrefEnabled(saved === 'true');
+      } catch (e) {
+        console.warn('[AccountScreen] Failed to load notify preference', e?.message || e);
+      }
     })();
   }, []);
 
   const updateNotifyPref = async (nextEnabled) => {
-    if (savingNotify) return;
+    if (savingNotify) {
+      console.log('[AccountScreen] updateNotifyPref ignored; save already in progress');
+      return;
+    }
+    console.log('[AccountScreen] updateNotifyPref called', { nextEnabled });
     setSavingNotify(true);
+    console.log('[AccountScreen] Saving notification preference…');
+    let effectiveEnabled = nextEnabled;
     try {
-      // Persist locally first for snappy UI
-      setNotifyEnabled(nextEnabled);
-      try { await AsyncStorage.setItem(NOTIFY_ENABLED_KEY, String(nextEnabled)); } catch {}
+      // Update UI immediately; persist once outcome is known
+      setNotifyPrefEnabled(nextEnabled);
+      if (!nextEnabled) {
+        try {
+          await AsyncStorage.setItem(NOTIFY_ENABLED_KEY, 'false');
+          console.log('[AccountScreen] Stored notify preference locally', { value: 'false' });
+        } catch (e) {
+          console.warn('[AccountScreen] Failed to store notify preference locally', e?.message || e);
+        }
+      }
 
       // If enabling, make sure we have permission and a token
       let fcmToken = null;
+      let tokenTimedOut = false;
       if (nextEnabled) {
         try {
-          fcmToken = await registerForFcmTokenAsync();
+          console.log('[AccountScreen] Requesting FCM token for reminders…');
+          let timeoutId;
+          let tokenResult;
+          try {
+            tokenResult = await Promise.race([
+              registerForFcmTokenAsync(),
+              new Promise((resolve) => {
+                timeoutId = setTimeout(() => resolve({ timeout: true }), FCM_TOKEN_TIMEOUT_MS);
+              }),
+            ]);
+          } finally {
+            if (timeoutId) clearTimeout(timeoutId);
+          }
+          tokenTimedOut = !!tokenResult?.timeout;
+          fcmToken = tokenTimedOut ? null : tokenResult || null;
+          console.log('[AccountScreen] FCM token result', {
+            hasToken: !!fcmToken,
+            timedOut: tokenTimedOut,
+          });
         } catch (e) {
           console.warn('Notification permission/token error', e?.message || e);
+        }
+
+        // If user denied permission or token is unavailable, revert toggle to off
+        if (!fcmToken) {
+          console.log('[AccountScreen] No FCM token available; reverting reminders to off', {
+            timedOut: tokenTimedOut,
+          });
+          effectiveEnabled = false;
+          setNotifyPrefEnabled(false);
+          try {
+            await AsyncStorage.setItem(NOTIFY_ENABLED_KEY, 'false');
+          } catch (e) {
+            console.warn('[AccountScreen] Failed to store reverted notify preference', e?.message || e);
+          }
+          try {
+            const title = tokenTimedOut ? 'Notifications timed out' : 'Notifications blocked';
+            const message = tokenTimedOut
+              ? 'We could not finish setting up notifications. Reminders are off for now. You can try again or enable notifications in your phone settings.'
+              : 'Reminders are off because notifications are disabled for Lawyer Diary. You can enable them in your phone settings to turn reminders on.';
+            Alert.alert(
+              title,
+              message
+            );
+          } catch {}
+        } else {
+          try {
+            await AsyncStorage.setItem(NOTIFY_ENABLED_KEY, 'true');
+            console.log('[AccountScreen] Stored notify preference locally', { value: 'true' });
+          } catch (e) {
+            console.warn('[AccountScreen] Failed to store notify preference locally', e?.message || e);
+          }
         }
       }
 
       // Upsert preference on backend (token optional)
       try {
+        console.log('[AccountScreen] Sending notify preference to backend', {
+          notifyEnabled: !!effectiveEnabled,
+          hasToken: !!fcmToken,
+        });
         await apiClient.post('/users', {
-          body: { notifyEnabled: !!nextEnabled, ...(fcmToken ? { fcmToken } : {}) },
+          body: { notifyEnabled: !!effectiveEnabled, ...(fcmToken ? { fcmToken } : {}) },
         });
       } catch (e) {
         console.warn('Failed to update notification preference', e?.message || e);
       }
     } finally {
+      console.log('[AccountScreen] Done saving notification preference');
       setSavingNotify(false);
     }
   };
@@ -118,11 +175,6 @@ export default function AccountScreen() {
   const createdAt = user?.metadata?.creationTime;
   // const lastSignIn = user?.metadata?.lastSignInTime; // removed from UI
   // App version section removed from UI
-
-  // Usage summary
-  const casesCount = caseItems.length;
-  const datesCount = dateItems.length;
-  // Next 7 days summary removed by request
 
   const handleSignOut = async () => {
     if (signingOut) return;
@@ -149,8 +201,9 @@ export default function AccountScreen() {
     }
   };
 
-  const showSupportContactInfo = () => {
-    Alert.alert('Contact support', `Please reach us at ${SUPPORT_EMAIL} and we'll assist you.`);
+  const showSupportContactInfo = (subject) => {
+    const to = subject === 'Bug report' ? BUG_EMAIL : SUPPORT_EMAIL;
+    Alert.alert('Contact support', `Please reach us at ${to} and we'll assist you.`);
   };
 
   const openSupportEmail = async (subject) => {
@@ -162,19 +215,28 @@ Please share details to help us assist you faster:
 - Any screenshots or notes?
 
 Account email: ${email}`;
-
-    const mailto = `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    const to = subject === 'Bug report' ? BUG_EMAIL : SUPPORT_EMAIL;
+    const mailto = `mailto:${to}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
     try {
       const canOpen = await Linking.canOpenURL(mailto);
       if (canOpen) {
         await Linking.openURL(mailto);
       } else {
         console.warn('No email app available for support contact');
-        showSupportContactInfo();
+        showSupportContactInfo(subject);
       }
     } catch (err) {
       console.warn('Failed to start support email', err);
-      showSupportContactInfo();
+      showSupportContactInfo(subject);
+    }
+  };
+
+  const handleShareApp = async () => {
+    try {
+      const message = `I'm using Lawyer Diary to track my cases and dates. Get it on Google Play: ${PLAY_STORE_URL}`;
+      await Share.share({ message });
+    } catch (e) {
+      console.warn('Share app failed', e?.message || e);
     }
   };
 
@@ -195,46 +257,44 @@ Account email: ${email}`;
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Account Details</Text>
           <View style={styles.row}>
-            <Text style={styles.rowLabel}>Time zone</Text>
-            <Text style={styles.rowValue}>{timeZone || '—'}</Text>
+            <Text style={styles.rowLabel}>Reminders</Text>
+            <Switch
+              value={notifyPrefEnabled}
+              onValueChange={updateNotifyPref}
+              disabled={savingNotify}
+            />
           </View>
           <View style={styles.row}>
-            <Text style={styles.rowLabel}>Last sync</Text>
-            <Text style={styles.rowValue}>
-              {lastSync ? formatDateWithTz(lastSync, timeZone) : 'Not synced yet'}
-            </Text>
+            <Text style={styles.rowLabel}>Time zone</Text>
+            <Text style={styles.rowValue}>{timeZone || '—'}</Text>
           </View>
           {/* Provider and User ID removed for user relevance */}
           <View style={styles.row}>
             <Text style={styles.rowLabel}>Created</Text>
             <Text style={styles.rowValue}>{formatDateWithTz(createdAt, timeZone)}</Text>
           </View>
-          <View style={styles.row}>
-            <Text style={styles.rowLabel}>Push notifications</Text>
-            <Switch
-              value={notifyEnabled}
-              onValueChange={updateNotifyPref}
-              disabled={savingNotify}
-            />
-          </View>
           {/* Last sign-in row removed by request */}
         </View>
 
-        {showUsageSummary && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Usage Summary</Text>
-            <View style={styles.row}>
-              <Text style={styles.rowLabel}>Cases</Text>
-              <Text style={styles.rowValue}>{casesCount}</Text>
+        <View style={styles.section}>
+          <View style={styles.shareContent}>
+            <View style={styles.shareIconWrap}>
+              <Ionicons name="heart" size={22} color={colors.primaryOnPrimary} />
             </View>
-            <View style={styles.row}>
-              <Text style={styles.rowLabel}>Dates</Text>
-              <Text style={styles.rowValue}>{datesCount}</Text>
-            </View>
+            <Text style={styles.shareTitle}>Enjoying Lawyer Diary?</Text>
+            <Text style={styles.shareSubtitle}>Share it with your colleagues and friends.</Text>
+            <TouchableOpacity
+              style={styles.shareButton}
+              onPress={handleShareApp}
+              activeOpacity={0.9}
+              accessibilityRole="button"
+              accessibilityLabel="Share app link"
+            >
+              <Ionicons name="share-outline" size={18} color={colors.primary} />
+              <Text style={styles.shareButtonLabel}>Share app link</Text>
+            </TouchableOpacity>
           </View>
-        )}
-
-        {/* App version section removed */}
+        </View>
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Support & Feedback</Text>
@@ -407,6 +467,48 @@ const styles = StyleSheet.create({
     color: colors.primaryOnPrimary,
   },
   supportButtonLabelSecondary: {
+    color: colors.textPrimary,
+  },
+  shareContent: {
+    width: '100%',
+    paddingVertical: 6,
+    paddingHorizontal: 4,
+    alignItems: 'center',
+  },
+  shareIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.iconMuted,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
+  shareTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: colors.textPrimary,
+  },
+  shareSubtitle: {
+    marginTop: 6,
+    fontSize: 13,
+    color: colors.textSecondary,
+    textAlign: 'center',
+  },
+  shareButton: {
+    marginTop: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  shareButtonLabel: {
+    fontSize: 13,
+    fontWeight: '600',
     color: colors.textPrimary,
   },
   signOutButton: {

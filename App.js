@@ -19,8 +19,8 @@ import ForgotPasswordScreen from './screens/ForgotPasswordScreen';
 
 import { store } from './store/store';
 import { initDatabase } from './database/database';
-import { fetchCases } from './store/casesSlice';
-import { fetchDates } from './store/caseDatesSlice';
+import { fetchCases, resetCasesState } from './store/casesSlice';
+import { fetchDates, resetCaseDatesState } from './store/caseDatesSlice';
 import { migrateLoadTestData, migrateTestData, clearAllData } from './database/migrateData';
 import UpcomingDatesScreen from './screens/UpcomingDatesScreen';
 import CaseCalendar from './components/CaseCalendar';
@@ -37,8 +37,10 @@ import analytics from '@react-native-firebase/analytics';
 import { usingWatermelon } from './config/featureFlags';
 import { useWatermelonSync } from './hooks/useWatermelonSync';
 import { apiClient } from './services/apiClient';
+import { clearSyncStateForUser } from './services/syncService';
 import { UserSettingsProvider, useUserSettings } from './context/UserSettingsContext';
 import { FeatureFlagsProvider } from './context/FeatureFlagsContext';
+import { setWatermelonDbName } from './database/wmProvider';
 // Deliberately do not request notification permission on startup
 // import { registerForFcmTokenAsync } from './services/pushNotificationsFcm';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -62,7 +64,6 @@ const Stack = createStackNavigator();
 
 // Component to handle database initialization and data loading
 function AppInitializer({ children }) {
-  const dispatch = useDispatch();
   const [isInitialized, setIsInitialized] = useState(false);
   const [error, setError] = useState(null);
 
@@ -74,25 +75,6 @@ function AppInitializer({ children }) {
         await initDatabase();
         console.log('Database initialized successfully');
 
-        // Kick off data loads in background; don't block UI
-        try {
-          console.log('Loading cases and dates (background)...');
-          dispatch(fetchCases());
-          dispatch(fetchDates());
-        } catch (e) {
-          console.log('Background data load failed to start:', e?.message || e);
-        }
-
-        // Optionally log if no data after first tick (non-blocking)
-        setTimeout(() => {
-          try {
-            const state = store.getState();
-            if ((state.cases.items?.length || 0) === 0 && (state.caseDates.items?.length || 0) === 0) {
-              console.log('No data found yet (will populate over time if needed)');
-            }
-          } catch {}
-        }, 0);
-
         // Unblock UI immediately after DB is ready
         setIsInitialized(true);
       } catch (error) {
@@ -103,7 +85,7 @@ function AppInitializer({ children }) {
     };
 
     initializeApp();
-  }, [dispatch]);
+  }, []);
 
   if (!isInitialized) {
     return <AnimatedSplash message="Loading data..." />;
@@ -122,16 +104,54 @@ function AppInitializer({ children }) {
 }
 
 function AppInner() {
+  const dispatch = useDispatch();
   const [isModalVisible, setModalVisible] = useState(false);
   const [authReady, setAuthReady] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
+  const cases = useSelector((s) => s.cases?.items || []);
+  const dates = useSelector((s) => s.caseDates?.items || []);
+  const hasAnyData = (cases && cases.length > 0) || (dates && dates.length > 0);
+  const [dataGateDone, setDataGateDone] = useState(false);
   const routeNameRef = useRef();
+  const previousUserIdRef = useRef(null);
+  const lastFetchedForRef = useRef(undefined);
+  const dataGateTimerRef = useRef(null);
   const { setTimeZone } = useUserSettings();
 
   useEffect(() => {
     const unsub = onAuthStateChanged(
       auth,
-      (u) => {
+      async (u) => {
+        const prevUid = previousUserIdRef.current;
+        const nextUid = u?.uid || null;
+        const userChanged = prevUid !== nextUid;
+        if (userChanged) {
+          if (dataGateTimerRef.current) {
+            try { clearTimeout(dataGateTimerRef.current); } catch {}
+            dataGateTimerRef.current = null;
+          }
+          setDataGateDone(false);
+          try {
+            dispatch(resetCasesState());
+            dispatch(resetCaseDatesState());
+          } catch (err) {
+            console.warn('Failed to reset local state on auth change', err?.message || err);
+          }
+          if (prevUid) {
+            try {
+              await clearSyncStateForUser(prevUid);
+            } catch (err) {
+              console.warn('Failed to clear sync state', err?.message || err);
+            }
+          }
+          try {
+            const targetDb = nextUid ? `lawyerdiary_${nextUid}` : 'lawyerdiary';
+            setWatermelonDbName(targetDb);
+          } catch (err) {
+            console.warn('Failed to set Watermelon DB name', err?.message || err);
+          }
+        }
+        previousUserIdRef.current = nextUid;
         setCurrentUser(u);
         setAuthReady(true);
       },
@@ -140,14 +160,32 @@ function AppInner() {
       }
     );
     return () => unsub();
-  }, []);
+  }, [clearSyncStateForUser, dispatch, resetCaseDatesState, resetCasesState, setWatermelonDbName]);
 
+  useEffect(() => {
+    if (!authReady) return;
+    const uid = currentUser?.uid || null;
+    if (lastFetchedForRef.current === uid) return;
+    lastFetchedForRef.current = uid;
+    try {
+      dispatch(fetchCases());
+      dispatch(fetchDates());
+    } catch (err) {
+      console.warn('Failed to load data after auth change', err?.message || err);
+    }
+  }, [authReady, currentUser, dispatch, fetchCases, fetchDates]);
 
   useEffect(() => {
     if (!authReady) return;
     analytics()
       .setUserId(currentUser?.uid ?? null)
       .catch((error) => console.warn('Analytics setUserId failed', error));
+  }, [authReady, currentUser]);
+
+  useEffect(() => {
+    if (!authReady || !currentUser) return;
+    const dbName = `lawyerdiary_${currentUser.uid}`
+    try { setWatermelonDbName(dbName); } catch (e) { console.warn('Failed to set Watermelon DB name', e?.message || e); }
   }, [authReady, currentUser]);
 
   // Upsert user profile/settings on login (timezone etc.)
@@ -184,7 +222,33 @@ function AppInner() {
   }, [authReady, currentUser]);
 
   // Kick off initial sync and on-foreground sync when using Watermelon
-  useWatermelonSync();
+  const initialSyncDone = useWatermelonSync();
+
+  useEffect(() => {
+    if (!authReady || !currentUser) {
+      if (dataGateTimerRef.current) {
+        try { clearTimeout(dataGateTimerRef.current); } catch {}
+        dataGateTimerRef.current = null;
+      }
+      if (dataGateDone) setDataGateDone(false);
+      return;
+    }
+    if (dataGateDone) return;
+    if (hasAnyData) {
+      if (dataGateTimerRef.current) {
+        try { clearTimeout(dataGateTimerRef.current); } catch {}
+        dataGateTimerRef.current = null;
+      }
+      setDataGateDone(true);
+      return;
+    }
+    if (!dataGateTimerRef.current) {
+      dataGateTimerRef.current = setTimeout(() => {
+        dataGateTimerRef.current = null;
+        setDataGateDone(true);
+      }, 2000);
+    }
+  }, [authReady, currentUser, hasAnyData, dataGateDone]);
 
   // ——— your bottom tabs, with a dummy “+” button in the middle ———
   function MainTabs() {
@@ -275,6 +339,18 @@ function AppInner() {
 
   if (!authReady) {
     return <AnimatedSplash message="Signing in..." />;
+  }
+
+  // After sign-in, keep showing an animated splash
+  // while we attempt the first cloud sync. If sync
+  // doesn't finish within ~5 seconds, we proceed and
+  // rely on local data (sync continues in background).
+  if (currentUser && !initialSyncDone) {
+    return <AnimatedSplash message="Syncing your data..." />;
+  }
+
+  if (currentUser && initialSyncDone && !dataGateDone) {
+    return <AnimatedSplash message="Loading your data..." />;
   }
 
   return (
