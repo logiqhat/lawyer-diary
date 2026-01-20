@@ -4,6 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import { Ionicons } from '@expo/vector-icons';
+import Constants from 'expo-constants';
 import { auth } from '../firebase';
 import Screen from '../components/Screen';
 import colors from '../theme/colors';
@@ -173,8 +174,8 @@ export default function AccountScreen() {
   const displayName = user?.displayName;
   // provider and uid intentionally omitted from UI
   const createdAt = user?.metadata?.creationTime;
+  const appVersion = Constants.expoConfig?.version || Constants.manifest?.version || '—';
   // const lastSignIn = user?.metadata?.lastSignInTime; // removed from UI
-  // App version section removed from UI
 
   const handleSignOut = async () => {
     if (signingOut) return;
@@ -339,6 +340,7 @@ Account email: ${email}`;
             <Text style={styles.signOutLabel}>{signingOut ? 'Signing out…' : 'Sign Out'}</Text>
           </TouchableOpacity>
         </View>
+        <Text style={styles.appVersionText}>Version {appVersion}</Text>
       </ScrollView>
     </Screen>
   );
@@ -525,5 +527,10 @@ const styles = StyleSheet.create({
     color: colors.surface,
     fontSize: 16,
     fontWeight: '600',
+  },
+  appVersionText: {
+    textAlign: 'center',
+    color: colors.textSecondary,
+    fontSize: 12,
   },
 });

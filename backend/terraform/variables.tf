@@ -53,3 +53,19 @@ variable "aws_profile" {
   type        = string
   default     = null
 }
+
+# ---------------- API Gateway throttling ----------------
+# Note: These defaults only take effect if backend/terraform/main.tf wires them into
+# aws_apigatewayv2_stage.default.default_route_settings.
+
+variable "api_throttling_rate_limit_rps" {
+  description = "API Gateway throttling steady-state rate limit (requests/second) applied at the stage level."
+  type        = number
+  default     = 200
+}
+
+variable "api_throttling_burst_limit" {
+  description = "API Gateway throttling burst limit applied at the stage level."
+  type        = number
+  default     = 400
+}

@@ -12,7 +12,7 @@ terraform {
 }
 
 provider "aws" {
-  region = var.aws_region
+  region  = var.aws_region
   profile = var.aws_profile
 }
 
@@ -21,7 +21,7 @@ locals {
   # SSM parameter name for the Firebase service account JSON
   firebase_service_account_param_name = "/${var.project}/firebase-service-account"
   # SSM parameter name for the admin shared secret used by /admin/notify
-  admin_shared_secret_param_name      = "/${var.project}/admin-shared-secret"
+  admin_shared_secret_param_name = "/${var.project}/admin-shared-secret"
 }
 
 # ---------------- DynamoDB Tables ----------------
@@ -131,8 +131,8 @@ resource "aws_iam_role_policy" "lambda_dynamo" {
     Version = "2012-10-17"
     Statement = [
       {
-        Effect   = "Allow"
-        Action   = [
+        Effect = "Allow"
+        Action = [
           "dynamodb:PutItem",
           "dynamodb:UpdateItem",
           "dynamodb:DeleteItem",
@@ -148,8 +148,8 @@ resource "aws_iam_role_policy" "lambda_dynamo" {
         ]
       },
       {
-        Effect   = "Allow"
-        Action   = [
+        Effect = "Allow"
+        Action = [
           "dynamodb:DescribeStream",
           "dynamodb:GetRecords",
           "dynamodb:GetShardIterator",
@@ -160,7 +160,7 @@ resource "aws_iam_role_policy" "lambda_dynamo" {
       },
       {
         Effect   = "Allow"
-        Action   = ["logs:CreateLogGroup","logs:CreateLogStream","logs:PutLogEvents"]
+        Action   = ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"]
         Resource = "*"
       }
     ]
@@ -176,8 +176,8 @@ resource "aws_iam_role_policy" "lambda_ssm_read" {
     Version = "2012-10-17"
     Statement = [
       {
-        Effect   = "Allow"
-        Action   = ["ssm:GetParameter"]
+        Effect = "Allow"
+        Action = ["ssm:GetParameter"]
         Resource = [
           aws_ssm_parameter.firebase_service_account.arn,
           aws_ssm_parameter.admin_shared_secret.arn
@@ -318,27 +318,27 @@ data "archive_file" "notifier_zip" {
 }
 
 resource "aws_lambda_function" "users" {
-  function_name = "${var.project}-users"
-  role          = aws_iam_role.lambda_role.arn
-  handler       = "index.handler"
-  runtime       = "nodejs16.x"
-  filename      = data.archive_file.users_zip.output_path
-  layers        = [aws_lambda_layer_version.shared.arn]
+  function_name    = "${var.project}-users"
+  role             = aws_iam_role.lambda_role.arn
+  handler          = "index.handler"
+  runtime          = "nodejs16.x"
+  filename         = data.archive_file.users_zip.output_path
+  layers           = [aws_lambda_layer_version.shared.arn]
   source_code_hash = filebase64sha256(data.archive_file.users_zip.output_path)
-  timeout       = 60
+  timeout          = 60
 
   environment { variables = { USERS_TABLE = aws_dynamodb_table.users.name, DEFAULT_TEST_USER_ID = var.default_test_user_id, STAGE = var.stage } }
 }
 
 resource "aws_lambda_function" "cases" {
-  function_name = "${var.project}-cases"
-  role          = aws_iam_role.lambda_role.arn
-  handler       = "index.handler"
-  runtime       = "nodejs16.x"
-  filename      = data.archive_file.cases_zip.output_path
-  layers        = [aws_lambda_layer_version.shared.arn]
+  function_name    = "${var.project}-cases"
+  role             = aws_iam_role.lambda_role.arn
+  handler          = "index.handler"
+  runtime          = "nodejs16.x"
+  filename         = data.archive_file.cases_zip.output_path
+  layers           = [aws_lambda_layer_version.shared.arn]
   source_code_hash = filebase64sha256(data.archive_file.cases_zip.output_path)
-  timeout       = 60
+  timeout          = 60
 
   environment {
     variables = {
@@ -354,14 +354,14 @@ resource "aws_lambda_function" "cases" {
 }
 
 resource "aws_lambda_function" "dates" {
-  function_name = "${var.project}-dates"
-  role          = aws_iam_role.lambda_role.arn
-  handler       = "index.handler"
-  runtime       = "nodejs16.x"
-  filename      = data.archive_file.dates_zip.output_path
-  layers        = [aws_lambda_layer_version.shared.arn]
+  function_name    = "${var.project}-dates"
+  role             = aws_iam_role.lambda_role.arn
+  handler          = "index.handler"
+  runtime          = "nodejs16.x"
+  filename         = data.archive_file.dates_zip.output_path
+  layers           = [aws_lambda_layer_version.shared.arn]
   source_code_hash = filebase64sha256(data.archive_file.dates_zip.output_path)
-  timeout       = 60
+  timeout          = 60
 
   environment {
     variables = {
@@ -377,20 +377,20 @@ resource "aws_lambda_function" "dates" {
 }
 
 resource "aws_lambda_function" "admin_notify" {
-  function_name = "${var.project}-admin-notify"
-  role          = aws_iam_role.lambda_role.arn
-  handler       = "index.handler"
-  runtime       = "nodejs16.x"
-  filename      = data.archive_file.admin_notify_zip.output_path
-  layers        = [aws_lambda_layer_version.shared.arn, aws_lambda_layer_version.firebase_admin.arn]
+  function_name    = "${var.project}-admin-notify"
+  role             = aws_iam_role.lambda_role.arn
+  handler          = "index.handler"
+  runtime          = "nodejs16.x"
+  filename         = data.archive_file.admin_notify_zip.output_path
+  layers           = [aws_lambda_layer_version.shared.arn, aws_lambda_layer_version.firebase_admin.arn]
   source_code_hash = filebase64sha256(data.archive_file.admin_notify_zip.output_path)
-  timeout       = 60
+  timeout          = 60
 
   environment {
     variables = {
-      USERS_TABLE          = aws_dynamodb_table.users.name
-      ADMIN_SHARED_SECRET_PARAM = aws_ssm_parameter.admin_shared_secret.name
-      STAGE                = var.stage
+      USERS_TABLE                    = aws_dynamodb_table.users.name
+      ADMIN_SHARED_SECRET_PARAM      = aws_ssm_parameter.admin_shared_secret.name
+      STAGE                          = var.stage
       FIREBASE_SERVICE_ACCOUNT_PARAM = aws_ssm_parameter.firebase_service_account.name
     }
   }
@@ -398,14 +398,14 @@ resource "aws_lambda_function" "admin_notify" {
 
 # Sync lambda
 resource "aws_lambda_function" "sync" {
-  function_name = "${var.project}-sync"
-  role          = aws_iam_role.lambda_role.arn
-  handler       = "index.handler"
-  runtime       = "nodejs16.x"
-  filename      = data.archive_file.sync_zip.output_path
-  layers        = [aws_lambda_layer_version.shared.arn]
+  function_name    = "${var.project}-sync"
+  role             = aws_iam_role.lambda_role.arn
+  handler          = "index.handler"
+  runtime          = "nodejs16.x"
+  filename         = data.archive_file.sync_zip.output_path
+  layers           = [aws_lambda_layer_version.shared.arn]
   source_code_hash = filebase64sha256(data.archive_file.sync_zip.output_path)
-  timeout       = 60
+  timeout          = 60
 
   environment {
     variables = {
@@ -423,42 +423,42 @@ resource "aws_lambda_function" "sync" {
 
 # Notify indexer lambda (streams)
 resource "aws_lambda_function" "notify_indexer" {
-  function_name = "${var.project}-notify-indexer"
-  role          = aws_iam_role.lambda_role.arn
-  handler       = "index.handler"
-  runtime       = "nodejs16.x"
-  filename      = data.archive_file.notify_indexer_zip.output_path
-  layers        = [aws_lambda_layer_version.shared.arn]
+  function_name    = "${var.project}-notify-indexer"
+  role             = aws_iam_role.lambda_role.arn
+  handler          = "index.handler"
+  runtime          = "nodejs16.x"
+  filename         = data.archive_file.notify_indexer_zip.output_path
+  layers           = [aws_lambda_layer_version.shared.arn]
   source_code_hash = filebase64sha256(data.archive_file.notify_indexer_zip.output_path)
-  timeout       = 60
+  timeout          = 60
 
   environment {
     variables = {
-      CASE_DATES_TABLE        = aws_dynamodb_table.case_dates.name
-      USERS_TABLE             = aws_dynamodb_table.users.name
-      UPCOMING_NOTIF_TABLE    = aws_dynamodb_table.upcoming_notifications.name
-      STAGE                   = var.stage
+      CASE_DATES_TABLE     = aws_dynamodb_table.case_dates.name
+      USERS_TABLE          = aws_dynamodb_table.users.name
+      UPCOMING_NOTIF_TABLE = aws_dynamodb_table.upcoming_notifications.name
+      STAGE                = var.stage
     }
   }
 }
 
 # Notifier lambda (scheduled via EventBridge every minute)
 resource "aws_lambda_function" "notifier" {
-  function_name = "${var.project}-notifier"
-  role          = aws_iam_role.lambda_role.arn
-  handler       = "index.handler"
-  runtime       = "nodejs16.x"
-  filename      = data.archive_file.notifier_zip.output_path
-  layers        = [aws_lambda_layer_version.shared.arn, aws_lambda_layer_version.firebase_admin.arn]
+  function_name    = "${var.project}-notifier"
+  role             = aws_iam_role.lambda_role.arn
+  handler          = "index.handler"
+  runtime          = "nodejs16.x"
+  filename         = data.archive_file.notifier_zip.output_path
+  layers           = [aws_lambda_layer_version.shared.arn, aws_lambda_layer_version.firebase_admin.arn]
   source_code_hash = filebase64sha256(data.archive_file.notifier_zip.output_path)
-  timeout       = 60
+  timeout          = 60
 
   environment {
     variables = {
-      UPCOMING_NOTIF_TABLE         = aws_dynamodb_table.upcoming_notifications.name
-      USERS_TABLE                  = aws_dynamodb_table.users.name
+      UPCOMING_NOTIF_TABLE           = aws_dynamodb_table.upcoming_notifications.name
+      USERS_TABLE                    = aws_dynamodb_table.users.name
       FIREBASE_SERVICE_ACCOUNT_PARAM = aws_ssm_parameter.firebase_service_account.name
-      STAGE                        = var.stage
+      STAGE                          = var.stage
     }
   }
 }
@@ -497,12 +497,12 @@ resource "aws_lambda_permission" "allow_stream_invoke_notify_indexer" {
 }
 
 resource "aws_lambda_event_source_mapping" "case_dates_stream_to_notify_indexer" {
-  event_source_arn  = aws_dynamodb_table.case_dates.stream_arn
-  function_name     = aws_lambda_function.notify_indexer.arn
-  starting_position = "LATEST"
-  batch_size        = 50
+  event_source_arn                   = aws_dynamodb_table.case_dates.stream_arn
+  function_name                      = aws_lambda_function.notify_indexer.arn
+  starting_position                  = "LATEST"
+  batch_size                         = 50
   maximum_batching_window_in_seconds = 2
-  enabled           = true
+  enabled                            = true
 }
 
 # CloudWatch access logs for API Gateway HTTP API
@@ -592,120 +592,126 @@ resource "aws_apigatewayv2_integration" "lambda_admin_notify" {
 }
 
 resource "aws_apigatewayv2_route" "post_cases" {
-  api_id    = aws_apigatewayv2_api.http_api.id
-  route_key = "POST /cases"
-  target    = "integrations/${aws_apigatewayv2_integration.lambda_cases.id}"
+  api_id             = aws_apigatewayv2_api.http_api.id
+  route_key          = "POST /cases"
+  target             = "integrations/${aws_apigatewayv2_integration.lambda_cases.id}"
   authorization_type = var.enforce_auth ? "JWT" : "NONE"
   authorizer_id      = var.enforce_auth ? aws_apigatewayv2_authorizer.firebase.id : null
 }
 
 resource "aws_apigatewayv2_route" "get_cases" {
-  api_id              = aws_apigatewayv2_api.http_api.id
-  route_key           = "GET /cases"
-  target              = "integrations/${aws_apigatewayv2_integration.lambda_cases.id}"
-  authorization_type  = var.enforce_auth ? "JWT" : "NONE"
-  authorizer_id       = var.enforce_auth ? aws_apigatewayv2_authorizer.firebase.id : null
+  api_id             = aws_apigatewayv2_api.http_api.id
+  route_key          = "GET /cases"
+  target             = "integrations/${aws_apigatewayv2_integration.lambda_cases.id}"
+  authorization_type = var.enforce_auth ? "JWT" : "NONE"
+  authorizer_id      = var.enforce_auth ? aws_apigatewayv2_authorizer.firebase.id : null
 }
 
 resource "aws_apigatewayv2_route" "get_case_by_id" {
-  api_id              = aws_apigatewayv2_api.http_api.id
-  route_key           = "GET /cases/{id}"
-  target              = "integrations/${aws_apigatewayv2_integration.lambda_cases.id}"
-  authorization_type  = var.enforce_auth ? "JWT" : "NONE"
-  authorizer_id       = var.enforce_auth ? aws_apigatewayv2_authorizer.firebase.id : null
+  api_id             = aws_apigatewayv2_api.http_api.id
+  route_key          = "GET /cases/{id}"
+  target             = "integrations/${aws_apigatewayv2_integration.lambda_cases.id}"
+  authorization_type = var.enforce_auth ? "JWT" : "NONE"
+  authorizer_id      = var.enforce_auth ? aws_apigatewayv2_authorizer.firebase.id : null
 }
 
 resource "aws_apigatewayv2_route" "put_case_by_id" {
-  api_id              = aws_apigatewayv2_api.http_api.id
-  route_key           = "PUT /cases/{id}"
-  target              = "integrations/${aws_apigatewayv2_integration.lambda_cases.id}"
-  authorization_type  = var.enforce_auth ? "JWT" : "NONE"
-  authorizer_id       = var.enforce_auth ? aws_apigatewayv2_authorizer.firebase.id : null
+  api_id             = aws_apigatewayv2_api.http_api.id
+  route_key          = "PUT /cases/{id}"
+  target             = "integrations/${aws_apigatewayv2_integration.lambda_cases.id}"
+  authorization_type = var.enforce_auth ? "JWT" : "NONE"
+  authorizer_id      = var.enforce_auth ? aws_apigatewayv2_authorizer.firebase.id : null
 }
 
 resource "aws_apigatewayv2_route" "delete_case_by_id" {
-  api_id              = aws_apigatewayv2_api.http_api.id
-  route_key           = "DELETE /cases/{id}"
-  target              = "integrations/${aws_apigatewayv2_integration.lambda_cases.id}"
-  authorization_type  = var.enforce_auth ? "JWT" : "NONE"
-  authorizer_id       = var.enforce_auth ? aws_apigatewayv2_authorizer.firebase.id : null
+  api_id             = aws_apigatewayv2_api.http_api.id
+  route_key          = "DELETE /cases/{id}"
+  target             = "integrations/${aws_apigatewayv2_integration.lambda_cases.id}"
+  authorization_type = var.enforce_auth ? "JWT" : "NONE"
+  authorizer_id      = var.enforce_auth ? aws_apigatewayv2_authorizer.firebase.id : null
 }
 
 resource "aws_apigatewayv2_route" "post_dates" {
-  api_id    = aws_apigatewayv2_api.http_api.id
-  route_key = "POST /dates"
-  target    = "integrations/${aws_apigatewayv2_integration.lambda_dates.id}"
+  api_id             = aws_apigatewayv2_api.http_api.id
+  route_key          = "POST /dates"
+  target             = "integrations/${aws_apigatewayv2_integration.lambda_dates.id}"
   authorization_type = var.enforce_auth ? "JWT" : "NONE"
   authorizer_id      = var.enforce_auth ? aws_apigatewayv2_authorizer.firebase.id : null
 }
 
 resource "aws_apigatewayv2_route" "get_dates" {
-  api_id              = aws_apigatewayv2_api.http_api.id
-  route_key           = "GET /dates"
-  target              = "integrations/${aws_apigatewayv2_integration.lambda_dates.id}"
-  authorization_type  = var.enforce_auth ? "JWT" : "NONE"
-  authorizer_id       = var.enforce_auth ? aws_apigatewayv2_authorizer.firebase.id : null
+  api_id             = aws_apigatewayv2_api.http_api.id
+  route_key          = "GET /dates"
+  target             = "integrations/${aws_apigatewayv2_integration.lambda_dates.id}"
+  authorization_type = var.enforce_auth ? "JWT" : "NONE"
+  authorizer_id      = var.enforce_auth ? aws_apigatewayv2_authorizer.firebase.id : null
 }
 
 resource "aws_apigatewayv2_route" "get_date_by_id" {
-  api_id              = aws_apigatewayv2_api.http_api.id
-  route_key           = "GET /dates/{id}"
-  target              = "integrations/${aws_apigatewayv2_integration.lambda_dates.id}"
-  authorization_type  = var.enforce_auth ? "JWT" : "NONE"
-  authorizer_id       = var.enforce_auth ? aws_apigatewayv2_authorizer.firebase.id : null
+  api_id             = aws_apigatewayv2_api.http_api.id
+  route_key          = "GET /dates/{id}"
+  target             = "integrations/${aws_apigatewayv2_integration.lambda_dates.id}"
+  authorization_type = var.enforce_auth ? "JWT" : "NONE"
+  authorizer_id      = var.enforce_auth ? aws_apigatewayv2_authorizer.firebase.id : null
 }
 
 resource "aws_apigatewayv2_route" "put_date_by_id" {
-  api_id              = aws_apigatewayv2_api.http_api.id
-  route_key           = "PUT /dates/{id}"
-  target              = "integrations/${aws_apigatewayv2_integration.lambda_dates.id}"
-  authorization_type  = var.enforce_auth ? "JWT" : "NONE"
-  authorizer_id       = var.enforce_auth ? aws_apigatewayv2_authorizer.firebase.id : null
+  api_id             = aws_apigatewayv2_api.http_api.id
+  route_key          = "PUT /dates/{id}"
+  target             = "integrations/${aws_apigatewayv2_integration.lambda_dates.id}"
+  authorization_type = var.enforce_auth ? "JWT" : "NONE"
+  authorizer_id      = var.enforce_auth ? aws_apigatewayv2_authorizer.firebase.id : null
 }
 
 resource "aws_apigatewayv2_route" "delete_date_by_id" {
-  api_id              = aws_apigatewayv2_api.http_api.id
-  route_key           = "DELETE /dates/{id}"
-  target              = "integrations/${aws_apigatewayv2_integration.lambda_dates.id}"
-  authorization_type  = var.enforce_auth ? "JWT" : "NONE"
-  authorizer_id       = var.enforce_auth ? aws_apigatewayv2_authorizer.firebase.id : null
+  api_id             = aws_apigatewayv2_api.http_api.id
+  route_key          = "DELETE /dates/{id}"
+  target             = "integrations/${aws_apigatewayv2_integration.lambda_dates.id}"
+  authorization_type = var.enforce_auth ? "JWT" : "NONE"
+  authorizer_id      = var.enforce_auth ? aws_apigatewayv2_authorizer.firebase.id : null
 }
 
 resource "aws_apigatewayv2_route" "post_users" {
-  api_id    = aws_apigatewayv2_api.http_api.id
-  route_key = "POST /users"
-  target    = "integrations/${aws_apigatewayv2_integration.lambda_users.id}"
+  api_id             = aws_apigatewayv2_api.http_api.id
+  route_key          = "POST /users"
+  target             = "integrations/${aws_apigatewayv2_integration.lambda_users.id}"
   authorization_type = var.enforce_auth ? "JWT" : "NONE"
   authorizer_id      = var.enforce_auth ? aws_apigatewayv2_authorizer.firebase.id : null
 }
 
 resource "aws_apigatewayv2_route" "post_sync_pull" {
-  api_id              = aws_apigatewayv2_api.http_api.id
-  route_key           = "POST /sync/pull"
-  target              = "integrations/${aws_apigatewayv2_integration.lambda_sync.id}"
-  authorization_type  = var.enforce_auth ? "JWT" : "NONE"
-  authorizer_id       = var.enforce_auth ? aws_apigatewayv2_authorizer.firebase.id : null
+  api_id             = aws_apigatewayv2_api.http_api.id
+  route_key          = "POST /sync/pull"
+  target             = "integrations/${aws_apigatewayv2_integration.lambda_sync.id}"
+  authorization_type = var.enforce_auth ? "JWT" : "NONE"
+  authorizer_id      = var.enforce_auth ? aws_apigatewayv2_authorizer.firebase.id : null
 }
 
 resource "aws_apigatewayv2_route" "post_sync_push" {
-  api_id              = aws_apigatewayv2_api.http_api.id
-  route_key           = "POST /sync/push"
-  target              = "integrations/${aws_apigatewayv2_integration.lambda_sync.id}"
-  authorization_type  = var.enforce_auth ? "JWT" : "NONE"
-  authorizer_id       = var.enforce_auth ? aws_apigatewayv2_authorizer.firebase.id : null
+  api_id             = aws_apigatewayv2_api.http_api.id
+  route_key          = "POST /sync/push"
+  target             = "integrations/${aws_apigatewayv2_integration.lambda_sync.id}"
+  authorization_type = var.enforce_auth ? "JWT" : "NONE"
+  authorizer_id      = var.enforce_auth ? aws_apigatewayv2_authorizer.firebase.id : null
 }
 
 resource "aws_apigatewayv2_route" "post_admin_notify" {
-  api_id              = aws_apigatewayv2_api.http_api.id
-  route_key           = "POST /admin/notify"
-  target              = "integrations/${aws_apigatewayv2_integration.lambda_admin_notify.id}"
-  authorization_type  = "NONE" # Secured via shared secret header
+  api_id             = aws_apigatewayv2_api.http_api.id
+  route_key          = "POST /admin/notify"
+  target             = "integrations/${aws_apigatewayv2_integration.lambda_admin_notify.id}"
+  authorization_type = "NONE" # Secured via shared secret header
 }
 
 resource "aws_apigatewayv2_stage" "default" {
   api_id      = aws_apigatewayv2_api.http_api.id
   name        = "$default"
   auto_deploy = true
+
+  # Global stage-level throttling (overall, not per-user).
+  default_route_settings {
+    throttling_rate_limit  = var.api_throttling_rate_limit_rps
+    throttling_burst_limit = var.api_throttling_burst_limit
+  }
 
   access_log_settings {
     destination_arn = aws_cloudwatch_log_group.api_access.arn
@@ -718,6 +724,37 @@ resource "aws_apigatewayv2_stage" "default" {
       stage     = "$context.stage"
     })
   }
+}
+
+# Alarm when throttling is actively happening (HTTP 429 responses observed).
+# This is derived from API Gateway access logs, since there is no dedicated "throttled requests" metric for HTTP APIs.
+resource "aws_cloudwatch_log_metric_filter" "api_throttled_429" {
+  name           = "${var.project}-${var.stage}-api-throttled-429"
+  log_group_name = aws_cloudwatch_log_group.api_access.name
+
+  # Matches the JSON access log format configured in aws_apigatewayv2_stage.default.access_log_settings
+  pattern = "{ $.status = 429 }"
+
+  metric_transformation {
+    name      = "Throttled429"
+    namespace = "${var.project}/${var.stage}/ApiGateway"
+    value     = "1"
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "api_throttling_active" {
+  alarm_name        = "${var.project}-${var.stage}-api-throttling-active"
+  alarm_description = "API Gateway is returning HTTP 429 (stage throttling is in effect)."
+
+  namespace           = "${var.project}/${var.stage}/ApiGateway"
+  metric_name         = aws_cloudwatch_log_metric_filter.api_throttled_429.metric_transformation[0].name
+  statistic           = "Sum"
+  period              = 60
+  evaluation_periods  = 1
+  datapoints_to_alarm = 1
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  threshold           = 1
+  treat_missing_data  = "notBreaching"
 }
 
 resource "aws_lambda_permission" "apigw_invoke_users" {

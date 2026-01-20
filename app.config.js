@@ -73,6 +73,7 @@ export default () => {
         package: 'com.logiqhat.lawyerdiary',
         googleServicesFile: resolveGoogleServicesFile(),
         versionCode: 1,
+        allowBackup: false,
         permissions: [
           'com.google.android.gms.permission.AD_ID',
           'android.permission.READ_MEDIA_IMAGES',

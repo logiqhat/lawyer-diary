@@ -12,7 +12,8 @@ function resolveBaseUrl() {
   const url = extra.apiBaseUrl;
   if (url) return url.replace(/\/$/, '');
   // Default to localhost for dev convenience
-  return 'http://localhost:3000';
+  if (__DEV__) return 'http://localhost:3000';
+  throw new Error('Missing API base URL for production build');
 }
 
 const API_BASE_URL = resolveBaseUrl();
@@ -106,4 +107,3 @@ export const apiClient = {
   buildUrl,
   API_BASE_URL,
 };
-

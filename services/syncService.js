@@ -126,7 +126,9 @@ export async function syncNow() {
     database,
     pullChanges: async ({ lastPulledAt }) => {
       const since = typeof lastPulledAt === 'number' ? lastPulledAt : (lastSaved || 0)
-      const { data } = await apiClient.post('/sync/pull', { body: { last_pulled_at: since } })
+      const { data } = await apiClient.post('/sync/pull', {
+        body: { last_pulled_at: since },
+      })
       const { changes, timestamp } = data || {}
       const wmChanges = {
         cases: {
